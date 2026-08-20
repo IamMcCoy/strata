@@ -27,7 +27,7 @@ class AddTool(Tool):
         'required': ['a', 'b'],
     }
 
-    async def execute(self, **kwargs):
+    async def execute(self, env, **kwargs):
         print(f"  [tool] add({kwargs['a']}, {kwargs['b']})")
         return kwargs['a'] + kwargs['b']
 

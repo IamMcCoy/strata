@@ -69,12 +69,17 @@ RLM이라는 이름의 유래. Root LM이 사용할 수 있는 가장 강력한 
 즉 Strata 관점에서 RLM은:
 
 ```text
-RLM = RecursiveStrategy + (PythonTool 등) + Runtime의 실행 제어(depth/budget) + Execution Tree
+RLM = RLMStrategy(ReAct loop + PythonTool REPL + llm_query → runtime.spawn_agent)
+      + Runtime의 실행 제어(depth/budget) + Execution Tree
 ```
 
 `Environment(Context)`의 객체화 — 거대 데이터를 변수로 담고 코드로만 접근하는
-구조 — 는 `Context.variables` + REPL Tool의 조합으로 표현한다
-([abstractions.md의 문맥의 객체화](../design/abstractions.md#문맥의-객체화--environmentcontext)).
+구조 — 는 `Context.variables` + REPL Tool의 조합으로 표현한다. REPL 네임스페이스가
+`Context.variables` 그 자체이고, `llm_query(prompt, context=chunk)`는 child의
+`variables['context']`에 조각만 넘긴다
+([abstractions.md의 문맥의 객체화](../design/abstractions.md#문맥의-객체화--environmentcontext),
+[strategies.md의 RLM](../design/strategies.md#rlm-strategy--문맥을-환경으로-다루는-재귀)).
+재귀의 트리거가 REPL 함수(Tool)인 이유는 [ADR-0007](../adr/0007-spawn-trigger-is-a-tool.md).
 
 로 분해된다. RLM은 프레임워크가 지원하는 하나의 패턴이며, 같은 기반 위에서
 ReAct·Reflection 등 다른 패턴도 동일하게 구현된다.

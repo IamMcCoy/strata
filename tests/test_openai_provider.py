@@ -15,7 +15,7 @@ class AddTool(Tool):
     description = 'Add two numbers'
     input_schema = {'type': 'object', 'properties': {'a': {'type': 'number'}}}
 
-    async def execute(self, **kwargs):
+    async def execute(self, env, **kwargs):
         return kwargs['a']
 
 

@@ -20,8 +20,8 @@ Task → Thought → Action(Tool) → Observation → Thought → ... → Final 
 - **강점**: 단순하고 범용적. 외부 정보가 필요한 대부분의 작업에 기본값.
 - **약점**: 루프가 길어지면 context가 선형으로 누적되어 오염(Context Rot)되고,
   중간에 잘못 든 길을 스스로 교정하기 어렵다.
-- **Strata 매핑**: `ReActStrategy` = `runtime.provider.generate()` +
-  `runtime.execute_tool()` 루프. 루프 상한은 `RuntimeConfig.max_iterations`가 강제.
+- **Strata 매핑**: `ReActStrategy` = `runtime.generate()` +
+  `runtime.execute_tool()` 루프. 루프 상한은 `runtime.generate`가 `max_iterations`로 강제.
   Phase 2에서 최초 구현.
 
 ## Reflection / Self-Refine
@@ -132,8 +132,8 @@ Supervisor → task 분해 → Worker A(researcher) / Worker B(coder) → 결과
 
 | 패턴 | 핵심 축 | 병렬성 | 주요 primitive | Phase |
 |---|---|---|---|---|
-| ReAct | 순차 tool 루프 | 없음 | `execute_tool` | 2 |
-| Recursive / RLM | 문제 분해 + 재귀 | 가능 (child) | `spawn_agent` | 3 |
+| ReAct | 순차 tool 루프 | 없음 | `generate` + `execute_tool` | 2 |
+| Recursive / RLM | 문제 분해 + 재귀 | 가능 (child) | `spawn_agent` (Tool이 트리거) | 3 |
 | Reflection | 생성-비평 루프 | 없음 | `generate` (+`spawn_agent`) | 7 |
 | Plan & Execute | 선계획 후실행 | 가능 (step) | `spawn_agent` | 향후 |
 | Router | 분류 후 위임 | — | `spawn_agent(strategy=...)` | 향후 |

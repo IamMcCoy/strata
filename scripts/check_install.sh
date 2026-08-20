@@ -13,6 +13,8 @@ uv pip install -q --python "$VENV/bin/python" dist/strata-*.whl
 
 # 개발 환경이 아닌, 설치된 wheel만으로 예제가 end-to-end 동작하는지
 "$VENV/bin/python" examples/react.py
+"$VENV/bin/python" examples/recursive.py
+"$VENV/bin/python" examples/rlm.py
 
 # 타입 힌트 마커(PEP 561)가 wheel에 포함됐는지
 "$VENV/bin/python" -c "

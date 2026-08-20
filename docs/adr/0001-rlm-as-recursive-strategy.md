@@ -1,6 +1,6 @@
 # 0001. RLM은 Tool이 아니라 Recursive Strategy로 구현한다
 
-- 상태: Accepted
+- 상태: Superseded by [0007](0007-spawn-trigger-is-a-tool.md) — "RLM은 Strategy"라는 결론은 유지되나, "Tool vs Strategy" 이분법은 정정됨(트리거는 Tool, 메커니즘은 Runtime)
 - 날짜: 2026-08-20
 
 ## Context
@@ -28,4 +28,5 @@ Execution Node를 가지며, 결과 계약(status/result/evidence/metadata)만 p
 - (+) RLM이 특수 케이스가 아니라 여러 Strategy 중 하나가 되어, ReAct·Reflection과
   같은 기반 위에서 조합할 수 있다 (예: child가 ReAct로 동작).
 - (−) 단순 "하위 LLM 한 번 호출"에도 Agent spawn 비용(Context 생성, Node 등록)이 든다.
-  가벼운 단발 호출이 필요하면 Strategy가 `runtime.provider.generate()`를 직접 쓰면 된다.
+  가벼운 단발 호출이 필요하면 Strategy가 `runtime.generate()`를 직접 쓰면 된다
+  (원문은 `runtime.provider.generate()` — ADR-0008로 대체).

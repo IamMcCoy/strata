@@ -69,18 +69,25 @@ class Tool(ABC):
 
     name: str
     description: str
-    input_schema: dict
+    input_schema: dict          # JSON Schema — Provider가 자사 형식으로 변환
 
-    async def execute(self, **kwargs):
+    async def execute(self, env: ToolEnv, **kwargs):
         ...
+
+
+@dataclass
+class ToolEnv:
+    context: Context            # 호출한 agent의 Context
+    runtime: Runtime            # run의 Runtime
 ```
 
-예: `WebSearchTool`, `PythonTool`, `DatabaseTool`, `FileTool`, `HTTPTool`,
-`MCPTool`, `CustomTool`.
+첫 인자 `env`는 **항상** 전달된다 ([ADR-0007](../adr/0007-spawn-trigger-is-a-tool.md)).
+대부분의 Tool은 무시한다. Runtime primitive가 필요한 Tool — `SpawnAgentTool`(`env.runtime.spawn_agent`),
+`PythonTool`(`env.context.variables`를 REPL 네임스페이스로, `llm_query` → spawn) — 만 사용한다.
+Tool이 Runtime에 닿는 길이 이것 하나이므로, Tool에서 시작하는 재귀도 한도·Tree의 통제 안이다.
 
-RLM의 REPL 환경은 이 관점에서 `PythonTool`의 한 형태일 뿐이다 —
-재귀 호출(`llm_query`)은 Tool이 아니라 Strategy + Runtime의 몫이다
-([ADR-0001](../adr/0001-rlm-as-recursive-strategy.md)).
+예: `WebSearchTool`, `PythonTool`, `DatabaseTool`, `FileTool`, `HTTPTool`,
+`MCPTool`, `CustomTool`. Tool 예외·unknown tool은 `runtime.execute_tool`이 관찰 문자열로 바꾼다.
 
 ## Memory
 
@@ -121,15 +128,14 @@ class Memory(ABC):
 ```python
 class Context:
 
-    messages        # 현재 대화/실행 메시지
-    variables       # 실행 중 상태 변수
-    tool_results    # Tool 실행 결과
-    child_results   # Child Agent 결과 (Recursive)
-    metadata
+    messages        # 현재 대화/실행 메시지 (user/assistant/tool)
+    instructions    # system 지시 — messages와 분리 (Strategy가 덧붙이고 child가 상속)
+    variables       # 실행 중 상태 변수 = RLM의 Environment (거대 입력은 variables['context'])
+    metadata        # task, execution_id 등
 ```
 
-포함될 수 있는 정보: Current Task, System Instructions, Current Messages,
-Tool Results, Child Agent Results, Execution State.
+Tool 결과와 child 결과는 별도 필드 없이 messages(관찰)와 Execution Tree에 남는다.
+system 지시를 messages에 섞지 않는 이유는 [strategies.md](strategies.md#지시instructions와-context) 참조.
 
 **Context는 현재 실행의 상태이며, 실행 종료 후 반드시 지속되어야 하는 것은 아니다.**
 지속이 필요한 정보는 Memory에 Store한다.
@@ -148,8 +154,12 @@ RLM의 핵심 관점(문맥을 "읽어야 할 텍스트"가 아닌 "프로그래
   window 한계를 우회한다.
 
 즉 RLM의 `RLM(Prompt, Environment(Context))` 형태에서 Environment는 별도
-abstraction이 아니라 **variables를 가진 Context + REPL Tool**이다. Phase 3 구현에서
-이 매핑이 부족하다고 판명되면 그때 독립 Environment abstraction으로 분화한다.
+abstraction이 아니라 **variables를 가진 Context + REPL Tool**이다.
+
+Phase 3 판정: 이 매핑은 충분하되 두 가지 배선이 필요했다 — (1) Tool이 Context에 닿아야
+한다(`ToolEnv`, ADR-0007), (2) `spawn_agent(context=...)`/`Agent.run(context=...)`가
+variables에 조각/원본을 넣어야 한다. 둘 다 구현됐고 독립 Environment abstraction은 만들지 않는다.
+구체적 흐름은 [strategies.md의 RLM](strategies.md#rlm-strategy--문맥을-환경으로-다루는-재귀) 참조.
 
 ## Agent
 
@@ -162,14 +172,20 @@ class Agent:
         self,
         provider,
         strategy,
-        tools,
-        memory,
-        runtime,
+        tools=None,
+        memory=None,
+        instructions=None,   # root Context.instructions — child가 상속
+        config=None,
     ):
         ...
+
+    async def run(self, task, context=None) -> AgentResult: ...   # context → variables['context']
+    runtime: Runtime | None                                        # 마지막 run의 Runtime (tree·usage 조회)
 ```
 
 **Agent 자체에는 특정 Agent Pattern의 실행 로직을 넣지 않는다.**
-`agent.run(task)`은 Context를 구성하고 Strategy에 실행을 위임할 뿐이다.
+`agent.run(task, context=None)`은 run당 하나의 Runtime을 만들고(ADR-0006), Context를 구성하고
+(거대 입력은 variables로) `runtime.run_strategy`를 통해 Strategy에 실행을 위임할 뿐이다 — timeout 적용과
+한도 초과의 계약 변환도 이 경로에서 일어난다.
 동일한 Agent abstraction에서 Strategy만 교체하여 실행 패턴을 바꾼다
 ([ADR-0003](../adr/0003-strategy-as-first-class-abstraction.md)).

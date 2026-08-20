@@ -30,7 +30,7 @@ Runtime은 각 구성요소를 직접 구현하지 않는다. **각 abstraction�
 | Provider | LLM 통신 추상화. Strategy는 특정 Provider API를 직접 호출하지 않는다 | [abstractions.md](../design/abstractions.md#provider) |
 | Tool | 외부 시스템·환경과의 상호작용 | [abstractions.md](../design/abstractions.md#tool) |
 | Memory | 실행 간 영속 정보의 저장과 검색 | [abstractions.md](../design/abstractions.md#memory) |
-| Context | 현재 실행의 상태 (messages, tool_results, child_results, …) | [abstractions.md](../design/abstractions.md#context) |
+| Context | 현재 실행의 상태 (messages, instructions, variables, …) | [abstractions.md](../design/abstractions.md#context) |
 | Strategy | 문제 해결의 실행 패턴. **프레임워크의 핵심 확장 포인트** | [strategies.md](../design/strategies.md) |
 | Agent | Provider + Strategy + Tools + Memory 를 조합한 실행 단위 | [abstractions.md](../design/abstractions.md#agent) |
 | Runtime | Registry, spawn, 실행 한도, 이벤트 등 공통 실행 환경 | [runtime.md](../design/runtime.md) |

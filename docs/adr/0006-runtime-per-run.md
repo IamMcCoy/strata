@@ -25,3 +25,4 @@ tree가 조각나 실행 제어가 무너진다. 또한 초기 스케치에는 `
 - (+) 공개 API가 `Agent.run` 하나로 단순해진다.
 - (−) 하나의 Runtime 인스턴스로 여러 run을 연속 실행하면 전역 상태가 섞인다.
   run 시작 시 상태 초기화 규칙이 필요하다 — Phase 5(Runtime Control)에서 구체화한다.
+  → 해소: `Agent.run`이 run마다 새 Runtime을 만든다. `Agent(runtime=...)` 주입은 없앴다.

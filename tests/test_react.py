@@ -3,12 +3,12 @@ from __future__ import annotations
 
 import asyncio
 
+from conftest import call
+from conftest import final
+from conftest import ScriptedProvider
 from strata import Agent
-from strata import ModelResponse
-from strata import Provider
 from strata import ReActStrategy
 from strata import Tool
-from strata import ToolCall
 
 
 class AddTool(Tool):
@@ -19,20 +19,8 @@ class AddTool(Tool):
         'properties': {'a': {'type': 'number'}, 'b': {'type': 'number'}},
     }
 
-    async def execute(self, **kwargs):
+    async def execute(self, env, **kwargs):
         return kwargs['a'] + kwargs['b']
-
-
-class ScriptedProvider(Provider):
-    """정해진 응답을 순서대로 반환하는 fake."""
-
-    def __init__(self, responses):
-        self.responses = list(responses)
-        self.seen_messages = []
-
-    async def generate(self, messages, tools=None, **kwargs):
-        self.seen_messages.append(list(messages))
-        return self.responses.pop(0)
 
 
 def make_agent(provider):
@@ -40,34 +28,42 @@ def make_agent(provider):
 
 
 def test_react_tool_loop():
-    provider = ScriptedProvider([
-        ModelResponse(tool_calls=[ToolCall(name='add', arguments={'a': 1, 'b': 2})]),
-        ModelResponse(text='3'),
-    ])
+    provider = ScriptedProvider([call('add', a=1, b=2), final('3')])
     result = asyncio.run(make_agent(provider).run('1 + 2?'))
     assert result.status == 'completed'
     assert result.result == '3'
     # tool 관찰이 다음 provider 호출의 메시지에 포함된다
-    observation = provider.seen_messages[-1][-1]
+    observation = provider.seen[-1][-1]
     assert observation['role'] == 'tool'
     assert observation['name'] == 'add'
     assert observation['content'] == '3'
 
 
 def test_react_unknown_tool_becomes_observation():
-    provider = ScriptedProvider([
-        ModelResponse(tool_calls=[ToolCall(name='nope', arguments={})]),
-        ModelResponse(text='recovered'),
-    ])
+    provider = ScriptedProvider([call('nope'), final('recovered')])
     result = asyncio.run(make_agent(provider).run('x'))
     assert result.result == 'recovered'
-    observation = provider.seen_messages[-1][-1]
+    observation = provider.seen[-1][-1]
     assert observation['role'] == 'tool'
     assert 'not found' in observation['content']
 
 
 def test_react_hits_iteration_limit():
-    tool_call = ModelResponse(tool_calls=[ToolCall(name='add', arguments={'a': 0, 'b': 0})])
-    provider = ScriptedProvider([tool_call] * 30)  # max_iterations 기본값과 동일
+    provider = ScriptedProvider([call('add', a=0, b=0)] * 30)  # max_iterations 기본값과 동일
     result = asyncio.run(make_agent(provider).run('loop'))
     assert result.status == 'budget_exceeded'
+
+
+def test_registry_tool_wins_over_strategy_default_tool():
+    """default_tools 규칙: 같은 이름이 registry에 있으면 registry 것을 광고하고 중복 광고하지 않는다."""
+    class MyAdd(AddTool):
+        pass
+
+    class AddByDefault(ReActStrategy):
+        default_tools = (AddTool(),)
+
+    provider = ScriptedProvider([final('ok')])
+    agent = Agent(provider=provider, strategy=AddByDefault(), tools=[MyAdd()])
+    asyncio.run(agent.run('x'))
+    advertised = AddByDefault().tools(agent.runtime)
+    assert [type(t) for t in advertised] == [MyAdd]
