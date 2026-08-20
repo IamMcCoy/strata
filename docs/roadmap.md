@@ -2,7 +2,7 @@
 
 각 Phase는 이전 Phase 위에 쌓인다. **완료 기준**을 만족하기 전에는 다음 Phase로 넘어가지 않는다.
 
-## Phase 1 — Core Abstraction
+## Phase 1 — Core Abstraction ✅
 
 Agent, Provider, Tool, Memory, Strategy, Context, Runtime 인터페이스 확립.
 **구현보다 abstraction 설계를 우선한다.**
@@ -10,7 +10,7 @@ Agent, Provider, Tool, Memory, Strategy, Context, Runtime 인터페이스 확립
 - 완료 기준: `src/strata/` 에 모든 base 클래스가 존재하고, import 및 서브클래싱이
   가능하며, 인터페이스가 [design 문서](design/abstractions.md)와 일치한다.
 
-## Phase 2 — ReAct
+## Phase 2 — ReAct ✅
 
 최소 Tool Calling Loop.
 

@@ -12,7 +12,24 @@ uv sync                        # .venv 생성 + 의존성 설치 (dev 그룹 포
 uv run pre-commit install      # git hook 등록 (클론 후 1회)
 uv run pytest                  # 테스트
 uv run pre-commit run --all-files   # 전체 파일 lint/포맷 검사
+uv run python examples/react.py     # ReAct end-to-end 예제
+scripts/check_install.sh            # wheel 빌드 → 깨끗한 venv 설치 → 소비자 시나리오 검증
 ```
+
+모든 검증은 위처럼 **저장소 안의 실행 가능한 파일**로 만든다 — 누구든 같은 명령으로
+재현할 수 있어야 한다. 일회성 인라인 실행으로 검증을 끝내지 않는다.
+
+### API 키 (.env)
+
+통합 테스트·예제에 필요한 키는 `.env`로 관리한다:
+
+```bash
+cp .env.example .env    # 열어서 키 입력 (.env는 gitignore됨 — 절대 커밋 금지)
+```
+
+`tests/conftest.py`가 pytest 실행 시 `.env`를 자동 로드하므로 터미널·IDE 어디서든
+동일하게 동작한다. 키가 없으면 통합 테스트는 실패가 아닌 skip으로 처리된다.
+프레임워크 코어는 `.env`를 읽지 않는다 — dotenv는 dev 의존성일 뿐이다.
 
 ## 브랜치 전략 — Git Flow
 
