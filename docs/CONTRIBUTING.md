@@ -1,0 +1,104 @@
+# Contributing Guide
+
+개발 환경, 브랜치 전략, 코드 스타일 규칙.
+
+## 개발 환경
+
+- **Python 3.12** (`.python-version`으로 고정, `requires-python >= 3.12`)
+- **[uv](https://docs.astral.sh/uv/)** 로 환경 관리
+
+```bash
+uv sync                        # .venv 생성 + 의존성 설치 (dev 그룹 포함)
+uv run pre-commit install      # git hook 등록 (클론 후 1회)
+uv run pytest                  # 테스트
+uv run pre-commit run --all-files   # 전체 파일 lint/포맷 검사
+```
+
+## 브랜치 전략 — Git Flow
+
+```text
+main ────────●──────────────●────────   릴리스만 (태그)
+              \            /
+develop ───────●──●──●──●──●─────────   통합 브랜치 (기본 작업 대상)
+                \       /
+feature/* ───────●──●──●─────────────   기능 단위 작업
+```
+
+| 브랜치 | 역할 | 규칙 |
+|---|---|---|
+| `main` | 릴리스 | 직접 커밋 금지. `develop`(또는 `hotfix/*`)에서만 머지, 머지 시 버전 태그 |
+| `develop` | 통합 | 직접 커밋 금지. `feature/*` PR의 대상 브랜치 |
+| `feature/<topic>` | 기능 작업 | `develop`에서 분기, 완료 시 `develop`으로 PR |
+| `hotfix/<topic>` | 긴급 수정 | `main`에서 분기, `main`과 `develop` 양쪽에 머지 |
+
+브랜치 이름은 kebab-case: `feature/react-strategy`, `feature/execution-tree`, `hotfix/token-count-overflow`.
+
+작업 흐름:
+
+```bash
+git checkout develop && git pull
+git checkout -b feature/react-strategy
+# ... 작업, 커밋 ...
+# develop 대상으로 PR 생성
+```
+
+머지 전 조건: `uv run pytest` / `uv run pre-commit run --all-files` 통과.
+
+## 커밋 컨벤션 — Conventional Commits
+
+```text
+<type>: <제목 (명령형, 50자 이내)>
+
+<본문 (선택): 무엇을, 왜>
+```
+
+| type | 용도 |
+|---|---|
+| `feat` | 기능 추가 |
+| `fix` | 버그 수정 |
+| `docs` | 문서만 변경 |
+| `refactor` | 동작 변경 없는 구조 개선 |
+| `test` | 테스트 추가·수정 |
+| `chore` | 빌드, 설정, 의존성 등 |
+
+예: `feat: ReActStrategy tool calling loop 구현`, `docs: ADR-0006 추가`.
+
+## 코드 스타일
+
+도구가 강제하는 것이 기준이다 — **pre-commit이 통과하면 스타일 논쟁은 끝**.
+커밋 시 자동 실행되며, 스택은 `.pre-commit-config.yaml` 참조:
+
+| 도구 | 역할 |
+|---|---|
+| flake8 | lint (`.flake8`: max-line-length 120) |
+| autopep8 | PEP 8 자동 포맷 |
+| double-quote-string-fixer | 문자열은 **작은따옴표** 통일 |
+| reorder-python-imports | import 한 줄 단위 정렬 + `from __future__ import annotations` 자동 추가 |
+| pyupgrade | 3.12 기준 최신 문법으로 재작성 |
+| mypy | 타입 검사 (`pyproject.toml`의 `[tool.mypy]`) |
+| pre-commit-hooks | trailing whitespace, EOF, YAML 검사, debug 문 검출, 테스트 파일명(`test_*.py`) |
+
+도구가 못 잡는 규칙:
+
+- **식별자는 영어** — 클래스·함수·변수는 설계 문서의 용어를 그대로 사용
+  (`Provider`, `spawn_agent`, `token_budget`). docstring·주석은 한국어 가능.
+- **공개 API에는 타입 힌트 필수** — base abstraction의 메서드 시그니처가 곧 계약이다.
+  내부 helper는 자명하면 생략 가능.
+- **abstraction 우선** — 구현체는 base 인터페이스에만 의존한다.
+  Strategy가 특정 Provider를 import하면 설계 위반 ([project-overview](overview/project-overview.md)의 책임 분리).
+- **docstring은 "왜"를 쓴다** — 코드가 보여주는 "무엇"을 반복하지 않는다.
+  설계 결정을 참조할 때는 ADR 번호를 명시 (`ADR-0004`).
+- **async 기본** — I/O 경계(Provider, Tool, Memory, spawn)는 모두 `async def`.
+
+### 테스트
+
+- pytest, `tests/` 아래에 `test_*.py`.
+- 프레임워크 특성상 실제 LLM 호출 없이 테스트한다 — `tests/test_smoke.py`의
+  `FakeProvider` / `FakeStrategy` 패턴을 재사용.
+- 새 기능은 해당 동작이 깨지면 실패하는 테스트 최소 1개를 동반한다.
+
+## 문서
+
+- 설계가 바뀌는 변경은 해당 `docs/design/*.md` 갱신을 같은 PR에 포함한다.
+- 새로운 설계 **결정**(되돌리기 비싼 선택)은 [ADR](adr/README.md)로 기록한다.
+- 문서 언어는 한국어, 기술 용어·식별자는 원문 유지.
