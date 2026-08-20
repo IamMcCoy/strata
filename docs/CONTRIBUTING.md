@@ -50,14 +50,47 @@ feature/* ───────●──●──●─────────�
 
 브랜치 이름은 kebab-case: `feature/react-strategy`, `feature/execution-tree`, `hotfix/token-count-overflow`.
 
-작업 흐름:
+### 작업 흐름 — feature 브랜치의 전체 수명주기
 
 ```bash
-git checkout develop && git pull
-git checkout -b feature/react-strategy
-# ... 작업, 커밋 ...
-# develop 대상으로 PR 생성
+# 1. 시작: 항상 최신 develop에서 분기
+git checkout develop
+git pull                                  # 원격의 최신 상태 받기
+git checkout -b feature/execution-tree    # 새 브랜치 생성 + 이동
+
+# 2. 작업: 코딩 → 검증 → 커밋 (반복)
+uv run pytest
+uv run pre-commit run --all-files
+git add -A
+git commit -m "feat: ..."                 # 커밋 시 pre-commit 훅이 자동 실행됨
+
+# 3. 머지: develop으로 돌아가서 --no-ff 머지
+git checkout develop
+git pull                                  # 그 사이 develop이 앞서갔을 수 있으니 다시 최신화
+git merge --no-ff feature/execution-tree  # 머지 커밋을 남기는 gitflow 방식
+
+# 4. 반영 + 정리
+git push                                  # develop을 원격에 반영
+git branch -d feature/execution-tree      # 로컬 브랜치 삭제
+git push origin --delete feature/execution-tree   # 원격에도 푸시했었다면 원격 브랜치도 삭제
 ```
+
+**`--no-ff`를 붙이는 이유**: 기본 머지(fast-forward)는 커밋을 develop에 일렬로 흡수해
+브랜치 흔적이 사라진다. `--no-ff`는 머지 커밋을 강제로 만들어 "어디서 갈라졌고 어디서
+합쳐졌는지"가 히스토리에 남는다 — 기능 단위 롤백(`git revert -m 1 <머지커밋>`)도 가능해진다.
+
+```text
+--no-ff (gitflow):                fast-forward (기본):
+develop ──●─────────●── merge     develop ──●──●──●   ← 브랜치 흔적 없음
+           \       /
+            ●──●──●   feature
+```
+
+자주 하는 실수:
+- **3단계에서 `git pull`을 빼먹음** → 다른 작업이 먼저 머지됐으면 push가 거부된다.
+- **`-d`가 아닌 `-D`로 삭제** → `-d`는 머지 안 된 브랜치를 보호한다(에러 발생 시 머지 누락 신호).
+  `-D`는 강제 삭제라 실수를 덮는다 — 항상 `-d` 먼저.
+- **원격 브랜치 삭제 누락** → 로컬만 지우면 `origin/feature/*`가 계속 쌓인다.
 
 머지 전 조건: `uv run pytest` / `uv run pre-commit run --all-files` 통과.
 
