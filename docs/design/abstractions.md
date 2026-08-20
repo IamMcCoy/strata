@@ -49,6 +49,16 @@ provider = VLLMProvider(base_url="http://localhost:8000/v1", model="qwen")
 `Tool.input_schema`(JSON Schema)를 각 Provider의 tool 형식으로 변환하는 책임도
 Provider에 있다 — Strategy와 Tool은 Provider별 형식을 모른다.
 
+### API Key와 의존성
+
+- 키 우선순위: **명시적 인자 > Provider별 관례 환경변수**
+  (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`).
+- 프레임워크는 키를 저장·로깅하지 않고 SDK에 전달만 한다.
+  `.env` 로딩도 프레임워크가 하지 않는다 — 앱의 몫이며 `.env`는 gitignore된다.
+- Provider SDK는 **optional extras**로 설치한다 (`uv add 'strata[openai]'`) —
+  코어는 의존성 0을 유지하고, SDK import는 Provider 생성 시점에 일어나므로
+  extras 없이도 `import strata`는 동작한다.
+
 ## Tool
 
 Agent가 외부 시스템·환경과 상호작용하기 위한 abstraction.

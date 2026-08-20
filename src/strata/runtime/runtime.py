@@ -32,4 +32,8 @@ class Runtime:
         raise NotImplementedError  # Phase 3 — Recursive / RLM
 
     async def execute_tool(self, name: str, arguments: dict) -> Any:
-        raise NotImplementedError  # Phase 2 — ReAct
+        tool = self.tools.get(name)
+        if tool is None:
+            # ponytail: 예외 대신 관찰 문자열 반환 — 모델이 잘못된 tool 이름에서 회복하게
+            return f"Tool '{name}' not found. Available: {sorted(self.tools)}"
+        return await tool.execute(**arguments)

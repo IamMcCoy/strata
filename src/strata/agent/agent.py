@@ -27,5 +27,8 @@ class Agent:
 
     async def run(self, task: str) -> AgentResult:
         # ponytail: Memory retrieve → Context 주입은 Phase 4에서 이 지점에 추가
-        context = Context(metadata={'task': task})
+        context = Context(
+            messages=[{'role': 'user', 'content': task}],
+            metadata={'task': task},
+        )
         return await self.strategy.execute(context, self.runtime)

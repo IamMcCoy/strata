@@ -20,6 +20,23 @@ result = await agent.run("복잡한 문제를 분석하고 결과를 도출해�
 
 같은 Agent에서 `strategy=` 만 교체하면 실행 패턴이 바뀐다.
 
+## 설치
+
+아직 PyPI에 배포하지 않았다 (배포명·라이선스 미정). git으로 직접 설치:
+
+```bash
+uv add git+https://github.com/IamMcCoy/strata.git
+# 또는: pip install git+https://github.com/IamMcCoy/strata.git
+```
+
+설치 후 `import strata` 로 사용한다. 타입 힌트가 포함되어 있다(PEP 561, `py.typed`).
+
+Provider SDK는 optional extra로 설치한다 (코어는 의존성 0):
+
+```bash
+uv add 'strata[openai] @ git+https://github.com/IamMcCoy/strata.git'
+```
+
 ## 문서
 
 - [문서 인덱스](docs/README.md) — 읽는 순서 안내

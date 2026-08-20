@@ -18,7 +18,12 @@ uv sync                              # 환경 생성 (Python 3.12, dev 그룹 �
 uv run pytest                        # 전체 테스트
 uv run pytest tests/test_smoke.py::test_agent_delegates_to_strategy   # 단일 테스트
 uv run pre-commit run --all-files    # lint/포맷/타입 검사 전체 (커밋 시 자동 실행됨)
+scripts/check_install.sh             # wheel 빌드 → 깨끗한 venv 설치 → 소비자 시나리오 검증
 ```
+
+**검증은 반드시 저장소 안의 실행 가능한 파일(tests/, scripts/, examples/)로 만들어 실행한다.**
+인라인 일회성 실행(heredoc, `python -c`)으로 검증을 끝내지 말 것 — 사용자가 같은 명령으로
+재현할 수 있어야 한다.
 
 ## 아키텍처 — 지켜야 할 불변식
 
