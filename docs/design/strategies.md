@@ -15,22 +15,35 @@ class Strategy(ABC):
 ```
 
 Strategy는 Provider·Tool·Memory·Child Agent에 직접 접근하지 않고
-**Runtime이 제공하는 primitive를 통해** 접근한다:
+**Runtime이 제공하는 primitive를 통해** 접근한다
+([ADR-0008](../adr/0008-all-primitives-through-runtime.md)):
 
 ```python
-runtime.provider
-runtime.tools
+runtime.generate(context, tools=..., instructions=...)   # LLM 호출 (system 조립·한도·usage)
+runtime.execute_tool(name, arguments, context, tools=...)  # Tool 실행 (예외 → 관찰)
+runtime.spawn_agent(task, parent_context, context=...)   # Child Agent (한도 → 계약)
 runtime.memory
-runtime.spawn_agent()
 runtime.execution
-runtime.events
 ```
 
-초기 구현: `ReActStrategy`, `RecursiveStrategy`.
+`runtime.provider`를 직접 호출하지 않는다 — 한도·집계·이벤트가 `generate`에 걸려 있다.
+
+초기 구현: `ReActStrategy`, `RecursiveStrategy`, `RLMStrategy`.
 향후: `ReflectionStrategy`, `PlanExecuteStrategy`, `RouterStrategy`,
 `DebateStrategy`, `SelfConsistencyStrategy`, `MultiAgentStrategy`, `CustomStrategy`.
 각 패턴의 배경과 Strata primitive 매핑은
 [agentic-patterns-background.md](../overview/agentic-patterns-background.md) 참조.
+
+## 지시(instructions)와 Context
+
+system 지시는 `Context.instructions`에 messages와 **분리**해 둔다. 이유:
+
+- Strategy가 호출 시점에 덧붙일 수 있다 — `generate(context, instructions=...)` 로 이번
+  호출의 system만 바꾼다(RLM이 변수 환경 설명을 붙이는 방식). 원본은 오염되지 않는다.
+- child가 상속한다 — `spawn_agent(instructions=None)`이면 parent의 **원본** 지시를 물려받고,
+  child의 Strategy가 자기 환경 설명을 다시 덧붙인다.
+
+`Agent(instructions=...)` → root Context, `spawn_agent(instructions=...)` → child Context.
 
 ## ReAct Strategy
 
@@ -42,38 +55,45 @@ Task → LLM → Action → Tool → Observation → LLM → ... → Final Answe
 
 ```python
 class ReActStrategy(Strategy):
+    default_tools: tuple[Tool, ...] = ()             # 전략 기본 tool — 하위 전략이 선언. registry와 이름 충돌 시 registry 우선
+
+    def tools(self, runtime) -> list[Tool]:          # 광고할 tool = registry 전체 + default_tools
+        return [*runtime.tools.values(), *(t for t in self.default_tools if t.name not in runtime.tools)]
+
+    def instructions(self, context, runtime):        # 이번 호출의 system — 확장 지점
+        return context.instructions
 
     async def execute(self, context, runtime):
-
-        for _ in range(runtime.config.max_iterations):
-
-            response = await runtime.provider.generate(
-                context.messages,
-                tools=list(runtime.tools.values()),
-            )
-
+        tools = self.tools(runtime)
+        by_name = {t.name: t for t in tools}
+        while True:                                   # 상한은 runtime.generate가 강제
+            response = await runtime.generate(context, tools=tools,
+                                              instructions=self.instructions(context, runtime))
+            context.messages.append({'role': 'assistant', 'content': response.text,
+                                     'tool_calls': response.tool_calls})
             if not response.tool_calls:
                 return AgentResult(result=response.text)
-
             for call in response.tool_calls:
-                result = await runtime.execute_tool(call.name, call.arguments)
-                context.add_tool_result(result)
-
-        return AgentResult(status='budget_exceeded')
+                observation = await runtime.execute_tool(call.name, call.arguments, context, tools=by_name)
+                context.messages.append({'role': 'tool', 'name': call.name,
+                                         'tool_call_id': call.id, 'content': _observation_text(observation)})
 ```
 
-tool call의 Provider별 형식 차이는 `ModelResponse.tool_calls`(`ToolCall`)가
-흡수한다 — Strategy는 파싱하지 않는다
-([abstractions.md](abstractions.md#provider)). 반복 한도 값은
-`RuntimeConfig.max_iterations`가 정의하고, `token_budget`·`timeout`은 Runtime이
-provider/tool 호출 시점에 강제한다 ([runtime.md](runtime.md#execution-control)).
+- "Thought"는 네이티브 tool calling 모델의 `response.text`에 암묵적으로 담긴다 — 별도의
+  Thought/Action 파싱 프롬프트를 쓰지 않는다. tool call의 Provider별 형식 차이는
+  `ModelResponse.tool_calls`(`ToolCall`)가 흡수한다 ([abstractions.md](abstractions.md#provider)).
+- 루프에 `max_iterations` 검사가 **없다**. `runtime.generate`가 노드당 호출 수를 세고
+  초과 시 `BudgetExceeded`를 올리며, Runtime이 `budget_exceeded` 계약(마지막 assistant
+  텍스트 포함)으로 변환한다 ([runtime.md](runtime.md#execution-control)).
+- 관찰은 문자열이면 그대로, 아니면 JSON(`_observation_text`). Tool 예외·unknown tool도
+  관찰로 돌아와 모델이 회복한다.
+- tool call은 순차 실행이다. 병렬 child가 필요한 패턴(Debate 등)은 `asyncio.gather`로 바꾼다.
+- `default_tools`는 하위 전략이 "이 패턴에 필요한 tool"을 선언하는 자리다. 사용자가 registry에
+  같은 이름의 Tool을 등록하면 그것이 광고된다 — 샌드박스 python, 근거를 남기는 spawn 등 교체점.
 
-## Recursive Strategy / RLM
+## Recursive Strategy — 위임형 재귀
 
-**RLM은 별도의 Tool이 아니다.** Agent가 문제 해결 과정에서 새로운 Agent Execution을
-생성할 수 있도록 하는 Recursive Agent Strategy로 구현한다
-([ADR-0001](../adr/0001-rlm-as-recursive-strategy.md), 배경은
-[rlm-background.md](../overview/rlm-background.md)).
+Agent가 문제 해결 과정에서 새로운 Agent Execution을 생성한다.
 
 ```text
 Root Agent
@@ -85,6 +105,17 @@ Root Agent
                     └── ...
 ```
 
+```python
+class RecursiveStrategy(ReActStrategy):
+    default_tools = (SpawnAgentTool(),)
+```
+
+그게 전부다. **트리거는 Tool, 메커니즘은 Runtime** ([ADR-0007](../adr/0007-spawn-trigger-is-a-tool.md)):
+`SpawnAgentTool.execute(env, task, context=None)`이 `env.runtime.spawn_agent(task, env.context,
+context=context)`를 부르고 결과 계약(`{status, result}`)을 관찰로 돌려준다. 한도 초과 시 모델은
+`budget_exceeded` 관찰을 받고 스스로 답해야 한다. registry에 등록되지 않고 Strategy가 광고하므로
+child를 다른 Strategy(예: ReAct)로 띄우면 그 child는 spawn_agent를 보지 못한다 — 조합 시 의도된 격리.
+
 ### Child Agent Spawn
 
 Recursive Strategy가 Agent를 직접 생성하지 않고 **Runtime의 spawn 기능**을 사용한다
@@ -94,17 +125,18 @@ Recursive Strategy가 Agent를 직접 생성하지 않고 **Runtime의 spawn 기
 child_result = await runtime.spawn_agent(
     task=subtask,
     parent_context=context,
+    context=sub_context,      # 선택 — child의 variables['context']
 )
 ```
 
 ```text
-RecursiveStrategy → runtime.spawn_agent() → Child Agent → Child Execution
-                                                              → Result → Parent Context
+Tool(spawn_agent | llm_query) → runtime.spawn_agent() → Child Context → Child Strategy
+                                                              → Result(계약) → 관찰
 ```
 
 **상속 규칙**: 미지정 인자는 parent 것을 상속한다 — child는 기본적으로 parent의
-provider/tools/memory/config를 물려받고, `strategy`와 `provider`는 오버라이드할 수
-있다 (RLM의 "말단 노드는 가벼운 모델" 전략 지원, [ADR-0006](../adr/0006-runtime-per-run.md)).
+instructions/strategy/provider/tools/memory/config를 물려받고, `instructions`·`strategy`·`provider`는
+오버라이드할 수 있다 (RLM의 "말단 노드는 가벼운 모델" 전략 지원, [ADR-0006](../adr/0006-runtime-per-run.md)).
 Runtime 인스턴스 자체는 새로 만들지 않고 parent 것을 공유한다 — 예산과
 Execution Tree가 run 전체에서 하나여야 하기 때문이다.
 
@@ -114,19 +146,20 @@ Execution Tree가 run 전체에서 하나여야 하기 때문이다.
 
 ### Context 격리
 
-Child Agent는 독립적인 Context를 가진다:
+Child Agent는 독립적인 Context를 가진다. parent의 messages·variables는 넘어가지 않는다 —
+`context` 인자로 넘긴 **조각만** child의 `variables['context']`가 된다.
 
 ```text
-Root Context                    Child Context
-├── User Task                   ├── Subtask
-├── Global Instructions         ├── Local State
-└── Child Results               └── Tool Results
+Root Context                          Child Context
+├── instructions (원본)               ├── instructions (상속 또는 지정)
+├── messages: User Task, ...          ├── messages: Subtask
+└── variables: context(거대 입력)     └── variables: context(조각만)
 ```
 
 ### 결과 계약 (Result Contract)
 
 Child의 전체 Context를 Parent에게 전달하지 않는다. **필요한 결과만** 정해진 형태로
-반환하여 Parent Context에 추가한다. 이것이 재귀에서 context 폭발을 막는 장치다.
+반환하여 Parent의 관찰이 된다. 이것이 재귀에서 context 폭발을 막는 장치다.
 
 ```json
 {
@@ -138,20 +171,110 @@ Child의 전체 Context를 Parent에게 전달하지 않는다. **필요한 결�
 ```
 
 - `status` — Parent가 실패·예산 초과를 구분해 대응할 수 있어야 한다.
+- `result` — `budget_exceeded`여도 child가 마지막으로 낸 텍스트가 담긴다(partial).
 - `evidence` — 검증(Reflection 등)에 쓸 근거. RLM의 "작은 문맥 검증" 패턴 지원.
 - Child 내부의 메시지 히스토리·tool 결과는 **계약에 포함되지 않는다.**
 
 ### 재귀 제어
 
 무한 재귀와 비용 폭발 방지는 Strategy가 아니라 Runtime의 책임이다:
-`max_depth`, `max_children`, `token_budget`, `timeout`
+`max_depth`, `max_children`, `max_iterations`, `token_budget`, `timeout`
 ([runtime.md](runtime.md#execution-control)).
+
+## RLM Strategy — 문맥을 환경으로 다루는 재귀
+
+**RLM은 별도의 Tool이 아니라 Strategy**다 ([ADR-0001](../adr/0001-rlm-as-recursive-strategy.md),
+배경은 [rlm-background.md](../overview/rlm-background.md)). 다만 Recursive와 층위가 다르다:
+Recursive가 *제어 흐름*(child 실행)이라면 RLM은 *데이터 흐름* — 거대 입력을 메시지가 아닌
+**변수(Environment)**로 두고 코드로만 다루며, 조각만 child에 내려보낸다.
+
+```text
+RLM = ReAct loop + PythonTool(REPL, 네임스페이스 = Context.variables) + llm_query → spawn_agent
+      + 환경 설명 instructions + Runtime 한도
+```
+
+```python
+class RLMStrategy(ReActStrategy):
+    default_tools = (PythonTool(),)                 # registry에 'python'이 있으면 그것을 쓴다(샌드박스 교체점)
+
+    def instructions(self, context, runtime):       # 원본 지시 + 변수 환경 설명(이름/타입/len) + 작업 패턴
+        return base + RLM_INSTRUCTIONS.format(variables=_describe_variables(context.variables))
+```
+
+흐름:
+
+1. `Agent.run(task, context=big)` → `Context.variables['context'] = big`. 메시지에는 올라가지 않는다.
+2. system 지시가 "변수 `context: str, len=N`이 있다, python tool로만 접근, `llm_query`로 위임,
+   답은 tool 없이 텍스트로"를 알려준다.
+3. 모델이 `python` tool로 `len(context)`, 슬라이스, 정규표현식으로 살핀다. REPL 상태(변수)는
+   호출 간 유지된다 — 네임스페이스가 `context.variables` 그 자체이기 때문.
+4. 코드 안에서 `llm_query(prompt, context=chunk)` → `env.runtime.spawn_agent(prompt, env.context,
+   context=chunk)` → child는 `variables['context'] = chunk`와 상속된 지시로 같은 RLMStrategy를
+   돈다(다시 재귀 가능). 반환은 child의 `result` 문자열. 루프로 수백 번 불러도 모델의 tool call은 하나다.
+5. 부분 답을 변수에 모아 최종 답을 텍스트로 낸다. 관찰은 `max_output`으로 잘라 window를 보호한다.
+
+`llm_query`는 모델 코드에서 동기 함수처럼 보이지만 exec가 worker thread에서 돌고
+`run_coroutine_threadsafe`로 이벤트 루프의 child 실행을 기다린다. **PythonTool은 샌드박스가 없다**
+(프로세스 권한으로 exec) — 신뢰된 환경 전용이며, 격리가 필요하면 같은 `name='python'`/schema로
+Docker·원격 커널 Tool을 만들어 `Agent(tools=[...])`에 등록하면 RLMStrategy가 그것을 쓴다.
+
+### Recursive vs RLM
+
+둘 다 `ReActStrategy` + `default_tools` 하나 차이다. Recursive는 **제어 흐름**(child를 띄운다),
+RLM은 **데이터 흐름**(거대 입력을 변수로 두고 코드로 조각내 child에 내려보낸다).
+
+| | RecursiveStrategy | RLMStrategy |
+|---|---|---|
+| 추가되는 tool | `spawn_agent` | `python` (REPL) |
+| 재귀 트리거 | 모델이 **tool call로 직접** `spawn_agent(task, context=...)` | 모델이 쓴 **코드 안에서** `llm_query(prompt, context=chunk)` |
+| tool call 1번당 child | 1개 | N개 (`for chunk in chunks: llm_query(...)`) |
+| 거대 입력 | 없음 — 모델이 window 안에서 task를 말로 분해 | `Agent.run(task, context=big)` → `variables['context']`. messages에 올라가지 않고 모델은 `len`·슬라이스·정규식으로만 본다 |
+| 상태 | 없음 | REPL 상태가 `context.variables`에 유지 — child 답을 변수에 모아 집계 |
+| system 지시 | 원본 그대로 | 원본 + 변수 목록(`context: str, len=N`) + 작업 패턴 |
+| 메커니즘 | `env.runtime.spawn_agent()` | 같음 |
+
+언제 뭘 쓰나:
+
+- **Recursive** — 문제가 *개념적으로* 쪼개질 때. "오픈소스 조사 / 상용 조사로 나눠라"(`examples/recursive.py`).
+  모델이 하위 task를 문장으로 만들 수 있으면 충분하다.
+- **RLM** — 입력이 *물리적으로* window를 넘을 때. 책 한 권에서 장별 숫자 합산(`examples/rlm.py`).
+  모델은 전체를 못 보므로 "tool call 하나에 조각 하나를 인자로 인라인"하는 Recursive 방식으로는
+  분할 정복이 성립하지 않는다 — 트리거를 코드(REPL) 쪽에 둬야 루프가 가능하다(ADR-0007의 동기).
+
+RLM child는 같은 RLMStrategy를 상속하므로 자기 조각에 대해 다시 `python`/`llm_query`를 쓸 수 있다 —
+즉 RLM ⊃ Recursive에 가깝고, Recursive는 "REPL 없이 가벼운 위임만 필요할 때"의 얇은 버전이다.
 
 ## Reflection Strategy (Phase 7)
 
 ```text
 Generate → Critique → Revision → Critique → Final
 ```
+
+## Router Strategy (Phase 8)
+
+쿼리 하나에 대해 **어느 Strategy가 최선인지** 모델이 고르고, 고른 Strategy가 끝까지 푼다.
+supervisor(작업 분해·위임)가 아니라 바깥 껍데기다 — 문제를 "푸는" 패턴이 아니라 "배분하는" 패턴.
+
+```text
+Task → (규칙: context 있음 → RLM) → 없으면 generate 1회로 분류 → spawn_agent(task, strategy=routes[name]) → 계약 그대로 반환
+```
+
+```python
+class RouterStrategy(Strategy):
+    routes: dict[str, Strategy]      # {'react': ReActStrategy(), 'rlm': RLMStrategy(), ...}
+    default: str                     # 분류 실패 시
+```
+
+결정 사항:
+
+- **각 Strategy는 `description`("언제 나를 쓰나" 한 줄)을 갖는다** — Tool이 `description`을 갖는 것과 대칭.
+  라우터는 routes의 description을 모아 분류 프롬프트를 만든다.
+- **분류는 free-text가 아니라 tool call** — `route(strategy: enum[routes])` tool을 광고해 `generate` 1회,
+  `tool_calls[0].arguments['strategy']`를 읽는다. 텍스트로 답하면 `default`.
+- **결정적 규칙이 모델보다 먼저** — `variables['context']`가 있으면 묻지 않고 RLM. 라우팅 실패는 전체 실패이므로
+  `default`는 필수이고, 분류 호출은 싼 모델로 할 수 있다(`provider` 오버라이드).
+- **Runtime 변경 없음** — 라우터가 root, 선택된 전략이 child 노드가 되어 Execution Tree에 "왜 이 전략인가"가 남는다.
+  `spawn_agent(strategy=...)`의 첫 실전 사용처.
 
 ## Strategy Composition (Phase 8)
 
@@ -164,7 +287,7 @@ Recursive
 ```
 
 이를 위해 Strategy를 enum이나 if/else가 아닌 독립적인 실행 abstraction으로 만든다.
-조합의 자연스러운 형태: `spawn_agent`에 child의 strategy를 지정할 수 있게 한다.
+조합의 자연스러운 형태: `spawn_agent(strategy=...)`로 child의 strategy를 지정한다 — 이미 지원된다.
 
 ## Custom Strategy
 
@@ -174,8 +297,8 @@ Recursive
 class MyStrategy(Strategy):
 
     async def execute(self, context, runtime):
-        ...  # runtime.provider / tools / memory / spawn_agent / events 사용 가능
+        ...  # runtime.generate / execute_tool / spawn_agent / memory / execution 사용 가능
 ```
 
 Custom Strategy도 Runtime의 공통 capability를 동일하게 사용한다 —
-이것이 프레임워크의 핵심 확장 포인트다.
+이것이 프레임워크의 핵심 확장 포인트다. 한도를 몰라도 Runtime이 막아 준다.

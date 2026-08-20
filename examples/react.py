@@ -26,7 +26,7 @@ class MultiplyTool(Tool):
         'required': ['a', 'b'],
     }
 
-    async def execute(self, **kwargs):
+    async def execute(self, env, **kwargs):
         return kwargs['a'] * kwargs['b']
 
 

@@ -21,7 +21,7 @@ class FakeProvider(Provider):
 
 class FakeStrategy(Strategy):
     async def execute(self, context, runtime):
-        response = await runtime.provider.generate(context.messages)
+        response = await runtime.generate(context)
         return AgentResult(result=response.text)
 
 

@@ -7,9 +7,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **Strata** — 다양한 Agentic Pattern(ReAct, Recursive/RLM, Reflection, …)을 하나의 Runtime 위에서
 조합·실행하는 확장형 Agent Execution Framework. Python 3.12, 런타임 의존성 0개.
 
-현재 **Phase 1 (Core Abstraction)** 단계: `src/strata/`에는 인터페이스 뼈대만 있고 실행 로직이 없다.
-`Runtime`의 `NotImplementedError`는 의도된 것 — 구현 순서와 각 Phase의 완료 기준은
-`docs/roadmap.md`를 따른다.
+Phase 1~3·5 완료(ReAct / Recursive / RLM Strategy, Runtime 한도 전체). 다음은 Phase 4(Memory)·
+Phase 6(Events). 구현 순서와 각 Phase의 완료 기준은 `docs/roadmap.md`를 따른다.
 
 ## 명령어
 
@@ -33,7 +32,8 @@ scripts/check_install.sh             # wheel 빌드 → 깨끗한 venv 설치 �
 1. **Agent에는 실행 패턴 로직을 넣지 않는다.** Agent는 Provider/Strategy/Tools/Memory의
    조합만 담당하고 실행은 `Strategy.execute(context, runtime)`에 위임한다 (ADR-0003).
 2. **Strategy는 Runtime primitive를 통해서만 리소스에 접근한다** —
-   `runtime.provider` / `runtime.tools` / `runtime.memory` / `runtime.spawn_agent()`.
+   `runtime.generate()` / `runtime.execute_tool()` / `runtime.spawn_agent()` / `runtime.memory`.
+   `runtime.provider.generate()` 직접 호출 금지(ADR-0008) — 한도·usage·이벤트가 `generate`에 걸려 있다.
    Strategy가 특정 Provider 구현을 import하면 설계 위반.
 3. **Child Agent 생성은 반드시 `runtime.spawn_agent()` 경유** (ADR-0004).
    한도 검사(max_depth/max_children/token_budget)·Execution Tree 등록·이벤트 발행이
@@ -45,6 +45,10 @@ scripts/check_install.sh             # wheel 빌드 → 깨끗한 venv 설치 �
 5. **Context(현재 실행 상태) ≠ Memory(실행 간 영속)** (ADR-0002).
    흐름은 `Memory → retrieve → Context → Strategy` 단방향.
 6. I/O 경계(Provider, Tool, Memory, spawn)는 모두 `async def`.
+7. **Tool은 `execute(self, env: ToolEnv, **kwargs)`** — Runtime에 닿는 유일한 길(ADR-0007).
+   재귀의 트리거(`SpawnAgentTool`, `PythonTool.llm_query`)도 Tool이지만 메커니즘은 `env.runtime.spawn_agent()`.
+8. system 지시는 `Context.instructions`(messages와 분리), 거대 입력은 `Context.variables['context']`
+   (messages에 인라인 금지). `Runtime.generate`가 system을 조립하고, child는 지시를 상속·조각만 받는다.
 
 설계가 바뀌는 변경은 해당 `docs/design/*.md`를 같은 커밋/PR에서 갱신하고,
 되돌리기 비싼 결정은 `docs/adr/`에 새 ADR로 기록한다 (기존 ADR은 supersede, 삭제 금지).

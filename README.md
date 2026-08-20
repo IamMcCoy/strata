@@ -8,17 +8,24 @@ Provider, Tool, Memory, Context, Strategy, Execution을 독립적인 primitive�
 Runtime이 이들을 연결·실행·관찰한다.
 
 ```python
+from strata import Agent, OpenAIProvider, RLMStrategy, RuntimeConfig
+
 agent = Agent(
-    provider=provider,
-    strategy=RecursiveStrategy(max_depth=5),
-    tools=[WebSearchTool(), PythonTool()],
-    memory=memory,
+    provider=OpenAIProvider(model='gpt-4o-mini'),
+    strategy=RLMStrategy(),             # ReActStrategy / RecursiveStrategy 로 교체 가능
+    instructions='한국어로 간결하게 답하라.',
+    config=RuntimeConfig(max_depth=3, token_budget=200_000),
 )
 
-result = await agent.run("복잡한 문제를 분석하고 결과를 도출해줘")
+# 거대 입력은 메시지가 아니라 변수 `context`로 들어간다 — 모델은 python tool로 조각내고
+# llm_query로 child agent에 조각만 넘겨 결과를 모은다 (RLM).
+result = await agent.run('이 문서의 모든 장의 핵심 숫자를 합산하라.', context=huge_document)
+print(result.status, result.result)        # completed | failed | budget_exceeded
 ```
 
-같은 Agent에서 `strategy=` 만 교체하면 실행 패턴이 바뀐다.
+같은 Agent에서 `strategy=` 만 교체하면 실행 패턴이 바뀐다. 한도(depth/children/iterations/
+token/timeout)는 Strategy가 아니라 Runtime이 강제하고, 초과 시 예외 대신 `budget_exceeded`
+결과(지금까지의 답 포함)를 돌려준다. Tool은 `execute(self, env, **kwargs)` 하나만 구현한다.
 
 ## 설치
 
@@ -48,8 +55,10 @@ uv add 'strata[openai] @ git+https://github.com/IamMcCoy/strata.git'
 
 ## 상태
 
-Phase 1 — Core Abstraction. 인터페이스 뼈대만 존재하며 실행 로직은 없다.
-구현 순서는 [로드맵](docs/roadmap.md) 참조.
+Phase 1~3·5 완료 — ReAct / Recursive / RLM Strategy, OpenAI Provider, Runtime 한도 전체.
+다음은 Memory(Phase 4)와 Events(Phase 6). 구현 순서는 [로드맵](docs/roadmap.md) 참조.
+예제: `examples/react.py`, `examples/recursive.py`, `examples/rlm.py`(fake provider),
+`examples/react_openai.py`, `examples/rlm_openai.py`(실제 API).
 
 ## 개발 환경
 
