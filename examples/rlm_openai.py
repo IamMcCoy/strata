@@ -52,7 +52,7 @@ async def main():
     document, answer = make_document()
     agent = Agent(
         provider=OpenAIProvider(model=os.environ.get('OPENAI_MODEL', 'gpt-4o-mini')),
-        strategy=RLMStrategy(),
+        strategy=RLMStrategy(model_params={'temperature': 0}),   # 패턴별 파라미터 — Provider 기본값보다 우선
         instructions='한국어로 답하라. 최종 답에는 합계 숫자를 반드시 포함하라.',
         config=RuntimeConfig(max_depth=2, max_iterations=15, token_budget=300_000),
     )

@@ -2,8 +2,11 @@ from __future__ import annotations
 
 from abc import ABC
 from abc import abstractmethod
+from collections.abc import Mapping
 from dataclasses import dataclass
 from dataclasses import field
+from types import MappingProxyType
+from typing import Any
 
 from strata.tools.base import Tool
 
@@ -35,7 +38,13 @@ class Provider(ABC):
     """LLM 통신 추상화. Strategy는 이 인터페이스만 바라본다.
 
     Tool.input_schema(JSON Schema)를 자사 tool 형식으로 변환하는 책임도 Provider에 있다.
+    model_params: 이 Provider로 나가는 모든 요청의 기본 샘플링 파라미터(temperature 등). 코어는 해석하지
+    않는다. 합치는 곳은 Runtime.generate 한 곳 — `{**provider.model_params, **호출 kwargs}` — 이므로
+    구현은 받은 kwargs를 요청에 그대로 실으면 된다. 구현은 인스턴스에서 dict(...)로 설정한다.
     """
+
+    # 클래스 기본값은 읽기 전용 — 모든 Provider가 공유하므로 실수로 고치면 누출 대신 TypeError. 설정은 인스턴스 속성으로.
+    model_params: Mapping[str, Any] = MappingProxyType({})
 
     @abstractmethod
     async def generate(

@@ -1,25 +1,41 @@
 from __future__ import annotations
 
 from strata.agent.context import Context
-from strata.runtime.runtime import Runtime
+from strata.strategies.react import REACT_PROMPT
 from strata.strategies.react import ReActStrategy
 from strata.tools.python import PythonTool
 
-RLM_INSTRUCTIONS = """\
-You work in a Python REPL environment. Large inputs are NOT in this conversation — they are \
-stored as Python variables that you can only inspect and process through the `python` tool. \
-REPL state persists between calls.
+RLM_PROMPT = REACT_PROMPT + """
 
-Available variables:
-{variables}
+# Working in the Python REPL
+Large inputs are NOT in this conversation. They are stored as Python variables that you can only \
+inspect and process through the `python` tool. The REPL is persistent: variables, imports, and \
+functions you define survive between calls. Never reassign `context` itself — derive new variables from it. \
+The variables that exist right now are listed at the end of this message and refreshed on every turn.
 
-Helper: `llm_query(prompt: str, context=None) -> str` runs a fresh sub-agent with its own clean \
-context window on `prompt`; if you pass `context` (e.g. a slice of a variable) the sub-agent sees it \
-as its own `context` variable. Use it to divide and conquer large inputs (loop over chunks, collect \
-answers in a variable) or to verify an answer against a small piece of evidence.
+## Inspecting without flooding the window
+- Start by measuring whatever is listed below (if `context` is there: `len(context)`, `type(context)`, \
+`context[:500]`). If no large variable is listed, there is no hidden input — answer from the task itself. \
+Never print a large variable whole — output is truncated and you learn nothing. Use slices, `re` searches, \
+counts, and summaries.
+- Each REPL call returns the printed output plus the value of a trailing expression; a Python \
+traceback is an observation, not a failure of the task — fix the code and run it again.
 
-Work pattern: inspect (len, slices, regex) → chunk → delegate with llm_query → aggregate in \
-variables → answer. When you have the final answer, reply with plain text and no tool call."""
+## Delegating with llm_query
+- `llm_query(prompt: str, context=None) -> str` runs a fresh sub-agent with its own clean window. \
+It sees only `prompt` and, if given, `context` as its own `context` variable — never this conversation \
+or your variables. Make `prompt` self-contained and tell it exactly what to return (format, length, \
+"answer NONE if absent").
+- Use it for divide and conquer: split the input into chunks sized for one window (a few thousand \
+characters or logical units such as chapters/records), loop `llm_query` over them, and collect the \
+answers in a variable. One `python` call may issue many `llm_query` calls.
+- Use it to verify: re-ask a narrow question against the small piece of evidence that should contain the answer.
+- If a result starts with `[failed]` or `[budget_exceeded]`, do not loop on it blindly: shrink the chunk, \
+rephrase, or handle that piece directly. Limits on depth and children apply to every agent.
+
+## Work pattern
+inspect (len, slices, regex) → chunk → delegate with llm_query → aggregate in variables → verify → answer \
+(plain text, no tool call — see Finishing above)."""
 
 
 def _describe_variables(variables: dict) -> str:
@@ -28,7 +44,10 @@ def _describe_variables(variables: dict) -> str:
     for name, value in variables.items():
         if name.startswith('_') or callable(value):
             continue
-        size = f', len={len(value)}' if hasattr(value, '__len__') else ''
+        try:
+            size = f', len={len(value)}'
+        except Exception:  # 모델이 만든 객체의 __len__이 없거나 터져도 하네스는 죽지 않는다 — 크기만 생략
+            size = ''
         lines.append(f'- {name}: {type(value).__name__}{size}')
     return '\n'.join(lines) or '- (none yet)'
 
@@ -43,7 +62,8 @@ class RLMStrategy(ReActStrategy):
     """
 
     default_tools = (PythonTool(),)
+    prompt = RLM_PROMPT
 
-    def instructions(self, context: Context, runtime: Runtime) -> str | None:
-        env = RLM_INSTRUCTIONS.format(variables=_describe_variables(context.variables))
-        return f'{context.instructions}\n\n{env}' if context.instructions else env
+    def environment(self, context: Context) -> str:
+        """현재 변수 목록 — 모델이 REPL에서 변수를 만들면 다음 호출의 system에 나타난다."""
+        return '## Current variables\n' + _describe_variables(context.variables)

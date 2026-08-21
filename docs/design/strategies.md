@@ -45,6 +45,28 @@ system 지시는 `Context.instructions`에 messages와 **분리**해 둔다. 이
 
 `Agent(instructions=...)` → root Context, `spawn_agent(instructions=...)` → child Context.
 
+system 메시지는 **두 층**으로 조립된다 — `ReActStrategy.instructions()` 한 곳에서:
+
+```text
+system = Context.instructions   (사용자 지시 — "무엇을". 원본·child 상속)
+       + Strategy.prompt        (패턴 지시 — "어떻게 움직여라". 고정 텍스트, harness prompt)
+       + environment(context)   (현재 상태 — RLM의 변수 목록. 호출마다 갱신, 기본 없음)
+```
+
+- `prompt`는 Strategy **클래스 속성**이고 **고정 텍스트**다(템플릿 아님 — `.format()` 없음).
+  `REACT_PROMPT` / `RECURSIVE_PROMPT` / `RLM_PROMPT`(각 전략 모듈 상단, `strata`에서 export)를
+  기본값으로 갖고, 하위 전략은 모듈 레벨 문자열 concat(`RECURSIVE_PROMPT = REACT_PROMPT + ...`)으로
+  공통 규칙 위에 자기 규칙을 얹는다 — `RecursiveStrategy.prompt`를 출력하면 그게 모델이 보는 전부다.
+- 덮어쓰기 세 단계: `ReActStrategy(prompt='...')` 인자 → 서브클래스 `prompt = ...` →
+  `instructions()` 오버라이드. `prompt=''`이면 패턴 지시를 끈다.
+- `environment(context)`는 실행 중 바뀌는 설명을 붙이는 훅이다. RLM이 `context.variables` 목록을,
+  향후 Reflection이 "이전 초안"을, Plan-Execute가 "현재 계획"을 붙이는 자리 — 변하는 것은 prompt에
+  구멍을 뚫지 말고 여기로.
+- 각 prompt가 규정하는 것(harness engineering): ReAct = tool 사용 규율·오류 관찰 회복·**종료 규약**
+  (최종 답은 tool call 없이 텍스트)·부분 답 우선. Recursive = child 격리(대화를 못 본다 → 자기완결
+  task)·위임 기준·`failed`/`budget_exceeded` 관찰 처리·종합. RLM = 변수 환경·창 보호(통째 print 금지)·
+  `llm_query` 자기완결+반환 형식·청킹·검증·traceback 회복.
+
 ## ReAct Strategy
 
 Tool을 반복적으로 사용하며 문제를 해결하는 패턴.
@@ -56,19 +78,30 @@ Task → LLM → Action → Tool → Observation → LLM → ... → Final Answe
 ```python
 class ReActStrategy(Strategy):
     default_tools: tuple[Tool, ...] = ()             # 전략 기본 tool — 하위 전략이 선언. registry와 이름 충돌 시 registry 우선
+    prompt: str = REACT_PROMPT                       # 패턴 지시(고정 텍스트) — 하위 전략이 교체, 사용자가 prompt= 로 덮어씀
+
+    def __init__(self, *, prompt=None, model_params=None):
+        if prompt is not None:
+            self.prompt = prompt
+        self.model_params = dict(model_params or {})  # 이 전략의 모든 generate에 실리는 샘플링 파라미터
 
     def tools(self, runtime) -> list[Tool]:          # 광고할 tool = registry 전체 + default_tools
         return [*runtime.tools.values(), *(t for t in self.default_tools if t.name not in runtime.tools)]
 
-    def instructions(self, context, runtime):        # 이번 호출의 system — 확장 지점
-        return context.instructions
+    def environment(self, context) -> str | None:    # 호출 시점에 변하는 상태 설명 — 하위 전략 확장 지점
+        return None
+
+    def instructions(self, context, runtime):        # system = 사용자 지시 + 패턴 지시 + 현재 상태
+        parts = (context.instructions, self.prompt, self.environment(context))
+        return '\n\n'.join(p for p in parts if p) or None
 
     async def execute(self, context, runtime):
         tools = self.tools(runtime)
         by_name = {t.name: t for t in tools}
         while True:                                   # 상한은 runtime.generate가 강제
             response = await runtime.generate(context, tools=tools,
-                                              instructions=self.instructions(context, runtime))
+                                              instructions=self.instructions(context, runtime),
+                                              **self.model_params)
             context.messages.append({'role': 'assistant', 'content': response.text,
                                      'tool_calls': response.tool_calls})
             if not response.tool_calls:
@@ -108,6 +141,7 @@ Root Agent
 ```python
 class RecursiveStrategy(ReActStrategy):
     default_tools = (SpawnAgentTool(),)
+    prompt = RECURSIVE_PROMPT                        # = REACT_PROMPT + 위임 규칙
 ```
 
 그게 전부다. **트리거는 Tool, 메커니즘은 Runtime** ([ADR-0007](../adr/0007-spawn-trigger-is-a-tool.md)):
@@ -196,9 +230,10 @@ RLM = ReAct loop + PythonTool(REPL, 네임스페이스 = Context.variables) + ll
 ```python
 class RLMStrategy(ReActStrategy):
     default_tools = (PythonTool(),)                 # registry에 'python'이 있으면 그것을 쓴다(샌드박스 교체점)
+    prompt = RLM_PROMPT                             # = REACT_PROMPT + REPL/llm_query 규칙 + 작업 패턴
 
-    def instructions(self, context, runtime):       # 원본 지시 + 변수 환경 설명(이름/타입/len) + 작업 패턴
-        return base + RLM_INSTRUCTIONS.format(variables=_describe_variables(context.variables))
+    def environment(self, context):                 # 현재 변수 목록(이름/타입/len) — 호출마다 갱신
+        return '## Current variables\n' + _describe_variables(context.variables)
 ```
 
 흐름:
@@ -216,7 +251,9 @@ class RLMStrategy(ReActStrategy):
 `llm_query`는 모델 코드에서 동기 함수처럼 보이지만 exec가 worker thread에서 돌고
 `run_coroutine_threadsafe`로 이벤트 루프의 child 실행을 기다린다. **PythonTool은 샌드박스가 없다**
 (프로세스 권한으로 exec) — 신뢰된 환경 전용이며, 격리가 필요하면 같은 `name='python'`/schema로
-Docker·원격 커널 Tool을 만들어 `Agent(tools=[...])`에 등록하면 RLMStrategy가 그것을 쓴다.
+Docker·원격 커널 Tool을 만들어 `Agent(tools=[...])`에 등록하면 RLMStrategy가 그것을 쓴다. 교체 Tool의
+계약은 이름·schema만이 아니다: **`llm_query(prompt, context=None)`를 네임스페이스에 주입**하고
+`env.runtime.spawn_agent`로 연결해야 한다 — `RLM_PROMPT`가 그 함수를 전제하기 때문이다.
 
 ### Recursive vs RLM
 
@@ -230,7 +267,7 @@ RLM은 **데이터 흐름**(거대 입력을 변수로 두고 코드로 조각�
 | tool call 1번당 child | 1개 | N개 (`for chunk in chunks: llm_query(...)`) |
 | 거대 입력 | 없음 — 모델이 window 안에서 task를 말로 분해 | `Agent.run(task, context=big)` → `variables['context']`. messages에 올라가지 않고 모델은 `len`·슬라이스·정규식으로만 본다 |
 | 상태 | 없음 | REPL 상태가 `context.variables`에 유지 — child 답을 변수에 모아 집계 |
-| system 지시 | 원본 그대로 | 원본 + 변수 목록(`context: str, len=N`) + 작업 패턴 |
+| system 지시 | 원본 + `RECURSIVE_PROMPT`(ReAct 규칙 + 위임 규칙) | 원본 + `RLM_PROMPT`(ReAct 규칙 + REPL/llm_query 규칙) + `environment`(변수 목록 `context: str, len=N`) |
 | 메커니즘 | `env.runtime.spawn_agent()` | 같음 |
 
 언제 뭘 쓰나:

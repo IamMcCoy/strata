@@ -16,8 +16,11 @@ from strata.runtime.runtime import BudgetExceeded
 from strata.runtime.runtime import Runtime
 from strata.strategies.base import AgentResult
 from strata.strategies.base import Strategy
+from strata.strategies.react import REACT_PROMPT
 from strata.strategies.react import ReActStrategy
+from strata.strategies.recursive import RECURSIVE_PROMPT
 from strata.strategies.recursive import RecursiveStrategy
+from strata.strategies.rlm import RLM_PROMPT
 from strata.strategies.rlm import RLMStrategy
 from strata.tools.base import Tool
 from strata.tools.base import ToolEnv
@@ -37,7 +40,10 @@ __all__ = [
     'OpenAIProvider',
     'Provider',
     'PythonTool',
+    'REACT_PROMPT',
+    'RECURSIVE_PROMPT',
     'RLMStrategy',
+    'RLM_PROMPT',
     'ReActStrategy',
     'RecursiveStrategy',
     'Runtime',

@@ -61,6 +61,8 @@ class Runtime:
 
         instructions를 넘기면 이번 호출에 한해 context.instructions 대신 쓴다
         (Strategy가 환경 설명 등을 덧붙이는 용도).
+        kwargs는 모델 파라미터(temperature 등) — Provider 기본값 위에 얹는다. 우선순위는 여기 한 줄뿐이다:
+        호출(Strategy) 값 > provider.model_params.
         """
         node = self.execution.nodes.get(context.metadata.get('execution_id'))
         if node is not None:
@@ -76,7 +78,7 @@ class Runtime:
         if system:
             messages = [{'role': 'system', 'content': system}, *messages]
 
-        response = await self.provider.generate(messages, tools=tools, **kwargs)
+        response = await self.provider.generate(messages, tools=tools, **{**self.provider.model_params, **kwargs})
         for key in USAGE_KEYS:
             self.usage[key] += int(response.usage.get(key, 0) or 0)
         return response

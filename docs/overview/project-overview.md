@@ -55,10 +55,12 @@ Provider ≠ Strategy
 
 ```python
 agent = Agent(
-    provider=provider,
-    strategy=RecursiveStrategy(max_depth=5),
+    provider=provider,                                   # OpenAIProvider(model, model_params={'temperature': 0.3})
+    strategy=RecursiveStrategy(prompt=..., model_params={'temperature': 0}),  # 패턴 지시·샘플링 파라미터 덮어쓰기(선택)
     tools=[WebSearchTool(), PythonTool()],
     memory=memory,
+    instructions='한국어로 답하라.',                       # 사용자 system 지시 — child가 상속
+    config=RuntimeConfig(max_depth=5, max_iterations=30, token_budget=200_000),  # 한도는 Runtime이 강제
 )
 
 result = await agent.run("복잡한 문제를 분석하고 결과를 도출해줘")
