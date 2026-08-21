@@ -27,14 +27,16 @@ def final(text):
 
 
 class ScriptedProvider(Provider):
-    """정해진 응답을 순서대로 반환한다. seen = 호출별 메시지 스냅샷."""
+    """정해진 응답을 순서대로 반환한다. seen = 호출별 메시지 스냅샷, kwargs = 호출별 모델 파라미터."""
 
     def __init__(self, responses):
         self.responses = list(responses)
         self.seen = []
+        self.kwargs = []
 
     async def generate(self, messages, tools=None, **kwargs):
         self.seen.append([dict(m) for m in messages])
+        self.kwargs.append(kwargs)
         if not self.responses:
             raise AssertionError('script exhausted')
         return self.responses.pop(0)

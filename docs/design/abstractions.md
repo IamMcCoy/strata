@@ -49,6 +49,25 @@ provider = VLLMProvider(base_url="http://localhost:8000/v1", model="qwen")
 `Tool.input_schema`(JSON Schema)를 각 Provider의 tool 형식으로 변환하는 책임도
 Provider에 있다 — Strategy와 Tool은 Provider별 형식을 모른다.
 
+### 모델 파라미터 (temperature 등)
+
+샘플링 파라미터는 코어가 해석하지 않는 **불투명 dict**다 — Provider마다 지원 키가 다르고
+(`top_k`는 Anthropic만, reasoning 모델은 `temperature` 거부) 코어는 모델 중립을 유지한다.
+`generate(**kwargs)`가 Runtime을 거쳐 Provider 요청에 그대로 실린다. 입구는 두 층:
+
+```python
+OpenAIProvider(model, model_params={'temperature': 0.2})   # 배포 기본값 — 이 Provider의 모든 요청
+ReActStrategy(model_params={'temperature': 0})             # 패턴별 값 — 이 Strategy의 모든 generate
+```
+
+우선순위는 **Strategy > Provider 기본값**이고, 합치는 곳은 `Runtime.generate` 한 줄뿐이다 —
+`provider.generate(messages, tools, **{**provider.model_params, **kwargs})`. `Provider` 베이스가
+`model_params`를 가지므로 구현(OpenAI, 향후 Anthropic 등)은 받은 kwargs를 요청에 그대로 실으면
+된다. child는 Strategy
+인스턴스를 상속하므로 같은 값을 쓰고, Router/Reflection처럼 "분류는 temp 0, 생성은 0.7"이 필요한
+패턴은 Strategy 인스턴스마다 다른 값을 준다. `RuntimeConfig`에는 두지 않는다 — 거긴 Runtime이
+*강제*하는 한도만 ([runtime.md](runtime.md#execution-control)).
+
 ### API Key와 의존성
 
 - 키 우선순위: **명시적 인자 > Provider별 관례 환경변수**

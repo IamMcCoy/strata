@@ -36,7 +36,8 @@ class TaskScriptedProvider(Provider):
         self.script = {task: list(responses) for task, responses in script.items()}
 
     async def generate(self, messages, tools=None, **kwargs):
-        return self.script[messages[0]['content']].pop(0)
+        task = next(m['content'] for m in messages if m['role'] == 'user')  # system 지시가 앞에 붙는다
+        return self.script[task].pop(0)
 
 
 def render(node, indent=0):

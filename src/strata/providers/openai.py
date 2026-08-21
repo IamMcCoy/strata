@@ -83,6 +83,8 @@ class OpenAIProvider(Provider):
 
     api_key 우선순위: 명시적 인자 > OPENAI_API_KEY 환경변수.
     프레임워크는 키를 저장·로깅하지 않고 SDK에 전달만 한다.
+    model_params: 기본 샘플링 파라미터(temperature, max_tokens 등) — 합치기는 Runtime.generate가 한다.
+    client_kwargs는 AsyncOpenAI 생성자로 간다.
     """
 
     def __init__(
@@ -90,6 +92,7 @@ class OpenAIProvider(Provider):
         model: str,
         api_key: str | None = None,
         base_url: str | None = None,
+        model_params: dict[str, Any] | None = None,
         **client_kwargs: Any,
     ):
         try:
@@ -99,6 +102,7 @@ class OpenAIProvider(Provider):
                 "OpenAIProvider requires the openai package: uv add 'strata[openai]'",
             ) from exc
         self.model = model
+        self.model_params = dict(model_params or {})
         self.client = AsyncOpenAI(
             api_key=api_key or os.environ.get('OPENAI_API_KEY'),
             base_url=base_url,

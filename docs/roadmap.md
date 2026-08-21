@@ -29,7 +29,9 @@ RLM:       PythonTool(REPL = Context.variables) → llm_query(prompt, context=ch
 ```
 
 동시에 Execution Tree, `max_depth`, `max_children`, `Context.instructions`, `ToolEnv`,
-`Runtime.generate` 구현 (ADR-0007/0008).
+`Runtime.generate` 구현 (ADR-0007/0008). 이어서 전략별 harness prompt(`Strategy.prompt` +
+`environment()`, `REACT/RECURSIVE/RLM_PROMPT`)와 모델 파라미터(`model_params`: Provider 기본값 <
+Strategy, merge는 `Runtime.generate`)를 사용자 덮어쓰기 가능하게 추가 (`tests/test_strategy_prompt_params.py`).
 
 - 완료 기준(Recursive): `examples/recursive.py` 에서 depth ≥ 2 의 재귀 실행이 동작하고,
   Execution Tree에 전체 tree가 기록되며, `max_depth` 초과 시 `budget_exceeded` 로 안전하게 종료된다.

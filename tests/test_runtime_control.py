@@ -10,7 +10,9 @@ from strata import Agent
 from strata import AgentResult
 from strata import ModelResponse
 from strata import Provider
+from strata import REACT_PROMPT
 from strata import ReActStrategy
+from strata import RECURSIVE_PROMPT
 from strata import RecursiveStrategy
 from strata import RuntimeConfig
 from strata import Strategy
@@ -28,17 +30,19 @@ class BoomTool(Tool):
 
 
 def test_instructions_become_system_message():
+    """사용자 지시가 앞, 전략 prompt가 뒤 — 한 system 메시지로 조립된다."""
     provider = ScriptedProvider([final('hi')])
     agent = Agent(provider=provider, strategy=ReActStrategy(), instructions='Be terse.')
     asyncio.run(agent.run('hello'))
-    assert provider.seen[0][0] == {'role': 'system', 'content': 'Be terse.'}
+    assert provider.seen[0][0] == {'role': 'system', 'content': f'Be terse.\n\n{REACT_PROMPT}'}
     assert provider.seen[0][1] == {'role': 'user', 'content': 'hello'}
 
 
-def test_no_instructions_means_no_system_message():
+def test_no_instructions_means_only_strategy_prompt_in_system():
     provider = ScriptedProvider([final('hi')])
     asyncio.run(Agent(provider=provider, strategy=ReActStrategy()).run('hello'))
-    assert provider.seen[0][0]['role'] == 'user'
+    assert provider.seen[0][0] == {'role': 'system', 'content': REACT_PROMPT}
+    assert provider.seen[0][1]['role'] == 'user'
 
 
 def test_max_iterations_enforced_by_runtime_even_for_custom_strategy():
@@ -110,9 +114,9 @@ def test_child_inherits_instructions_and_receives_sub_context():
     result = asyncio.run(agent.run('root'))
     assert result.result == 'root done'
     assert captured == {'variables': {'context': 'CHUNK'}, 'instructions': 'SYS'}
-    # child의 system 메시지도 상속된 지시로 조립된다
+    # child의 system 메시지도 상속된 원본 지시 + 자기 전략 prompt로 조립된다
     child_call = provider.seen[1]
-    assert child_call[0] == {'role': 'system', 'content': 'SYS'}
+    assert child_call[0] == {'role': 'system', 'content': f'SYS\n\n{RECURSIVE_PROMPT}'}
     assert child_call[1] == {'role': 'user', 'content': 'child task'}
 
 

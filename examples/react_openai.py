@@ -44,7 +44,10 @@ async def main():
         raise SystemExit('OPENAI_API_KEY를 설정하세요: export OPENAI_API_KEY=sk-...')
 
     agent = Agent(
-        provider=OpenAIProvider(model=os.environ.get('OPENAI_MODEL', 'gpt-4o-mini')),
+        provider=OpenAIProvider(
+            model=os.environ.get('OPENAI_MODEL', 'gpt-4o-mini'),
+            model_params={'temperature': 0},   # 이 Provider의 모든 호출에 적용되는 배포 기본값
+        ),
         strategy=ReActStrategy(),   # fake provider 예제(react.py)와 완전히 동일한 Strategy
         tools=[AddTool()],
     )

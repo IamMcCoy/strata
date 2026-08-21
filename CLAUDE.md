@@ -49,6 +49,10 @@ scripts/check_install.sh             # wheel 빌드 → 깨끗한 venv 설치 �
    재귀의 트리거(`SpawnAgentTool`, `PythonTool.llm_query`)도 Tool이지만 메커니즘은 `env.runtime.spawn_agent()`.
 8. system 지시는 `Context.instructions`(messages와 분리), 거대 입력은 `Context.variables['context']`
    (messages에 인라인 금지). `Runtime.generate`가 system을 조립하고, child는 지시를 상속·조각만 받는다.
+   전략의 패턴 지시는 `Strategy.prompt`(고정 텍스트, `REACT/RECURSIVE/RLM_PROMPT`) + `environment()`(호출
+   시점 상태)로 `instructions()`가 붙인다 — 변하는 것은 prompt에 구멍을 뚫지 말고 `environment()`로.
+   모델 파라미터(temperature 등)는 코어가 해석하지 않는 dict이며 우선순위(Strategy > Provider 기본값)는
+   `Runtime.generate`의 merge 한 줄에만 있다 — Provider 구현에서 다시 합치지 않는다.
 
 설계가 바뀌는 변경은 해당 `docs/design/*.md`를 같은 커밋/PR에서 갱신하고,
 되돌리기 비싼 결정은 `docs/adr/`에 새 ADR로 기록한다 (기존 ADR은 supersede, 삭제 금지).

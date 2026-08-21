@@ -11,9 +11,10 @@ Runtime이 이들을 연결·실행·관찰한다.
 from strata import Agent, OpenAIProvider, RLMStrategy, RuntimeConfig
 
 agent = Agent(
-    provider=OpenAIProvider(model='gpt-4o-mini'),
-    strategy=RLMStrategy(),             # ReActStrategy / RecursiveStrategy 로 교체 가능
-    instructions='한국어로 간결하게 답하라.',
+    provider=OpenAIProvider(model='gpt-4o-mini', model_params={'temperature': 0.3}),  # 배포 기본 파라미터
+    strategy=RLMStrategy(),             # ReActStrategy / RecursiveStrategy 로 교체 가능.
+                                        # prompt=(패턴 지시) / model_params=(이 전략의 파라미터) 로 덮어쓰기
+    instructions='한국어로 간결하게 답하라.',   # 사용자 system 지시 — 전략의 harness prompt 앞에 붙고 child가 상속
     config=RuntimeConfig(max_depth=3, token_budget=200_000),
 )
 
@@ -23,9 +24,12 @@ result = await agent.run('이 문서의 모든 장의 핵심 숫자를 합산하
 print(result.status, result.result)        # completed | failed | budget_exceeded
 ```
 
-같은 Agent에서 `strategy=` 만 교체하면 실행 패턴이 바뀐다. 한도(depth/children/iterations/
-token/timeout)는 Strategy가 아니라 Runtime이 강제하고, 초과 시 예외 대신 `budget_exceeded`
-결과(지금까지의 답 포함)를 돌려준다. Tool은 `execute(self, env, **kwargs)` 하나만 구현한다.
+같은 Agent에서 `strategy=` 만 교체하면 실행 패턴이 바뀐다. 각 Strategy는 자기 패턴의 harness
+prompt(tool 규율·종료 규약·위임/REPL 규칙)를 기본으로 갖고 system = `instructions` + `prompt` +
+현재 상태로 조립한다. 한도(depth/children/iterations/token/timeout)는 Strategy가 아니라 Runtime이
+강제하고, 초과 시 예외 대신 `budget_exceeded` 결과(지금까지의 답 포함)를 돌려준다. 모델 파라미터는
+Provider 기본값 위에 Strategy 값이 얹힌다(합치는 곳은 `Runtime.generate` 한 줄). Tool은
+`execute(self, env, **kwargs)` 하나만 구현한다.
 
 ## 설치
 

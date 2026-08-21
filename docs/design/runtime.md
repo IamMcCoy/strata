@@ -53,7 +53,7 @@ Strategy는 `runtime.provider`를 직접 호출하지 않는다 ([ADR-0008](../a
 
 | primitive | 하는 일 |
 |---|---|
-| `generate(context, tools, instructions)` | `context.instructions`(또는 인자로 덮어쓴 지시)를 system 메시지로 앞에 붙여 Provider 호출. 노드당 호출 수(`max_iterations`)·run 전체 `token_budget` 검사, `usage` 누적 |
+| `generate(context, tools, instructions, **kwargs)` | `context.instructions`(또는 인자로 덮어쓴 지시)를 system 메시지로 앞에 붙여 Provider 호출. 노드당 호출 수(`max_iterations`)·run 전체 `token_budget` 검사, `usage` 누적. kwargs는 모델 파라미터 — `{**provider.model_params, **kwargs}`로 합쳐 전달(우선순위는 이 한 줄, [abstractions.md](abstractions.md#모델-파라미터-temperature-등)) |
 | `execute_tool(name, arguments, context, tools)` | `ToolEnv(context, runtime)`를 첫 인자로 Tool 실행. **알 수 없는 tool·Tool 예외는 관찰 문자열로 반환** — 모델 실수로 run이 죽지 않는다. `tools`는 Strategy가 자체 tool(spawn_agent, python)을 광고할 때 넘기는 매핑(기본 registry) |
 | `spawn_agent(task, parent_context, context=, instructions=, strategy=, provider=)` | child 생성·실행. `context`는 child의 `variables['context']`(sub-context), `instructions` 미지정 시 parent 것 상속, strategy/provider 미지정 시 상속. 한도 초과·child 예외는 `AgentResult` 계약으로 반환 |
 

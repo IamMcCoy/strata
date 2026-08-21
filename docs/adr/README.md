@@ -15,6 +15,7 @@
 | [0006](0006-runtime-per-run.md) | Runtime은 run당 하나이며 Agent.run이 유일한 진입점이다 | Accepted |
 | [0007](0007-spawn-trigger-is-a-tool.md) | 재귀의 트리거는 Tool, 메커니즘은 runtime.spawn_agent — Tool은 ToolEnv로 Runtime에 접근한다 | Accepted |
 | [0008](0008-all-primitives-through-runtime.md) | LLM 호출을 포함한 세 primitive는 모두 Runtime을 경유한다 (runtime.generate) | Accepted |
+| [0009](0009-strategy-prompt-seam-and-model-params.md) | 패턴 지시는 Strategy.prompt(고정)+environment(동적), 모델 파라미터 우선순위(Strategy > Provider)는 Runtime.generate 한 줄 | Accepted |
 
 ## 템플릿
 
