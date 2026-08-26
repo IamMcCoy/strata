@@ -10,7 +10,7 @@ from dataclasses import field
 class AgentResult:
     """Child → Parent 결과 계약. 전체 Context가 아닌 이 형태만 parent에 전달된다."""
 
-    status: str = 'completed'  # completed | failed | budget_exceeded
+    status: str = 'completed'  # completed | failed | budget_exceeded | cancelled
     result: str | None = None
     evidence: list = field(default_factory=list)
     metadata: dict = field(default_factory=dict)

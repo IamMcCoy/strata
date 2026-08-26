@@ -8,6 +8,7 @@ from strata.agent.context import Context
 from strata.providers.base import ModelResponse
 from strata.runtime.config import RuntimeConfig
 from strata.runtime.execution import ExecutionManager
+from strata.runtime.ids import new_run_id
 from strata.strategies.base import AgentResult
 from strata.strategies.base import Strategy
 from strata.tools.base import Tool
@@ -29,6 +30,18 @@ class BudgetExceeded(Exception):
         self.limit = limit
 
 
+class Cancelled(Exception):
+    """Runtime이 협조적 취소를 Strategy에 알리는 내부 신호 (ADR-0011).
+
+    BudgetExceeded와 같은 길을 쓴다 — Strategy가 몰라도 run_strategy가
+    AgentResult(status='cancelled')로 변환한다. 지금까지의 답은 버리지 않는다.
+    """
+
+    def __init__(self, reason: str | None = None):
+        super().__init__(reason or 'cancelled')
+        self.reason = reason
+
+
 class Runtime:
     """Agent 실행의 공통 환경: registry, generate/execute_tool/spawn primitive, 실행 한도.
 
@@ -39,6 +52,10 @@ class Runtime:
     """
 
     def __init__(self, provider=None, tools=None, memory=None, config=None):
+        # run 하나의 유일한 이름. child는 spawn에서 이 Runtime을 공유하므로 run_id도 공유한다
+        # — 재귀 전체가 하나의 run이다 (ADR-0011).
+        self.run_id: str = new_run_id()
+        self.cancelled: str | None = None  # 협조적 취소 플래그 — cancel()이 세운다
         self.provider = provider
         self.tools: dict[str, Tool] = {t.name: t for t in (tools or [])}
         self.memory = memory
@@ -47,6 +64,22 @@ class Runtime:
         self.usage: dict[str, int] = dict.fromkeys(USAGE_KEYS, 0)  # run 전체 누적
         # spawn 시 strategy 미지정이면 이 값을 상속 — root Agent가 설정 (ADR-0006)
         self.default_strategy: Strategy | None = None
+
+    def cancel(self, reason: str = 'cancelled') -> None:
+        """협조적 취소를 요청한다. 다음 primitive 경계에서 멈추고 지금까지의 답을 반환한다.
+
+        asyncio.Task.cancel()과 다르다: 그쪽은 즉시 끊어 부분 결과를 버리고,
+        이쪽은 이미 쓴 토큰을 살린다. 실행 중인 tool은 끝까지 기다린다.
+        """
+        self.cancelled = reason
+
+    def _check_stop(self) -> None:
+        """취소·토큰 예산 검사. generate와 spawn_agent가 공유하는 관문."""
+        if self.cancelled:
+            raise Cancelled(self.cancelled)
+        budget = self.config.token_budget
+        if budget is not None and self.usage['total_tokens'] >= budget:
+            raise BudgetExceeded('token_budget', budget)
 
     # ---- primitive 1: LLM 호출 ---------------------------------------------------
 
@@ -69,9 +102,9 @@ class Runtime:
             node.iterations += 1
             if node.iterations > self.config.max_iterations:
                 raise BudgetExceeded('max_iterations', self.config.max_iterations)
-        budget = self.config.token_budget
-        if budget is not None and self.usage['total_tokens'] >= budget:
-            raise BudgetExceeded('token_budget', budget)
+        # ponytail: 취소는 generate와 spawn_agent에서만 본다 — 루프의 심장이라 매 반복 지난다.
+        # 실행 중인 tool은 끝까지 간다(취소가 최대 tool 하나만큼 늦는다). 더 빨라야 하면 execute_tool에도 단다.
+        self._check_stop()
 
         system = instructions if instructions is not None else context.instructions
         messages = context.messages
@@ -132,6 +165,9 @@ class Runtime:
         parent = self.execution.nodes.get(parent_context.metadata.get('execution_id'))
         if parent is None:
             raise ValueError('parent_context is not attached to an execution node')
+        # 취소는 계약이 아니라 신호로 올린다 — depth/children 초과는 "이 가지만 못 간다"지만
+        # 취소는 "run 전체를 멈춰라"이기 때문이다. run_strategy가 계약으로 변환한다.
+        self._check_stop()
 
         if parent.depth + 1 > self.config.max_depth:
             return AgentResult(
@@ -174,6 +210,13 @@ class Runtime:
         """Strategy 실행 + 한도 초과를 결과 계약으로 변환. Agent.run과 spawn_agent가 공유한다."""
         try:
             return await strategy.execute(context, runtime or self)
+        except Cancelled as exc:
+            # 지금까지의 답을 버리지 않는다 — 협조적 취소의 존재 이유다
+            return AgentResult(
+                status='cancelled',
+                result=context.last_assistant_text(),
+                metadata={'reason': exc.reason},
+            )
         except BudgetExceeded as exc:
             return AgentResult(
                 status='budget_exceeded',

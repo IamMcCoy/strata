@@ -77,6 +77,11 @@ class Agent:
                 result=ctx.last_assistant_text(),
                 metadata={'reason': 'timeout', 'limit': self.config.timeout},
             )
+        except asyncio.CancelledError:
+            # 하드 취소(asyncio) — 프로그래밍 오류와 다른 사건이므로 tree에도 다르게 남긴다.
+            # 부분 결과를 살리려면 이게 아니라 runtime.cancel()을 쓴다 (ADR-0011).
+            runtime.execution.close(node.id, AgentResult(status='cancelled'))
+            raise
         except BaseException:
             # root의 프로그래밍 오류는 숨기지 않는다 — tree에만 failed로 남기고 전파
             runtime.execution.close(node.id, AgentResult(status='failed'))
@@ -84,5 +89,8 @@ class Agent:
         # 다음 턴에 history로 그대로 되돌려 줄 transcript. Agent.run에만 붙인다 —
         # spawn_agent가 만드는 child의 AgentResult에는 실리지 않는다(재귀 context 폭발 방지).
         result.metadata['messages'] = ctx.messages
+        # 코어가 남긴 기록(트리·로그)을 가리키는 이름. 앱은 자기 task_id 옆에 이걸 적어둔다.
+        # 인자로 받지 않는다 — 외부 문자열에 유일성을 의존시키지 않는다 (ADR-0011).
+        result.metadata['run_id'] = runtime.run_id
         runtime.execution.close(node.id, result)
         return result

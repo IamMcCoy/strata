@@ -31,6 +31,8 @@ lifecycle을 관리하는 공통 실행 환경**이다.
 ```python
 class Runtime:
 
+    run_id              # 이 run의 유일한 이름 (UUIDv7). child가 공유 — 재귀 전체가 하나의 run
+    cancelled           # 협조적 취소 플래그 — cancel()이 세운다
     provider
     tools               # name → Tool registry
     memory
@@ -43,7 +45,8 @@ class Runtime:
     async def execute_tool(self, name, arguments, context, tools=None) -> Any: ...
     async def spawn_agent(self, task, parent_context, *, context=None,
                           instructions=None, strategy=None, provider=None) -> AgentResult: ...
-    async def run_strategy(self, strategy, context) -> AgentResult: ...   # 한도 초과 → 계약 변환
+    async def run_strategy(self, strategy, context) -> AgentResult: ...   # 한도 초과·취소 → 계약 변환
+    def cancel(self, reason='cancelled') -> None: ...                     # 협조적 취소 요청
 ```
 
 ### Primitive — Strategy가 리소스에 닿는 유일한 길
@@ -134,6 +137,33 @@ RuntimeConfig(
   Strategy는 이 예외를 몰라도 된다(잡아서 더 나은 partial을 만들 수는 있다).
 - child의 일반 예외 → `status='failed'` 계약. root의 일반 예외는 숨기지 않고 전파한다
   (tree에는 failed로 남는다) — 프로그래밍 오류는 사용자가 봐야 한다.
+
+## 취소 — 두 종류 (ADR-0011)
+
+| | 하드 | 협조적 |
+|---|---|---|
+| 호출 | `asyncio.Task.cancel()` | `runtime.cancel(reason)` |
+| 시점 | 즉시, `await` 지점 | 다음 primitive 경계 (`generate` / `spawn_agent`) |
+| 부분 결과 | 없음 — 예외 전파 | `AgentResult(status='cancelled', result=<마지막 답>)` |
+
+협조적 취소는 `BudgetExceeded`와 **같은 배관**을 쓴다: `_check_stop()`이 플래그를 보고
+`Cancelled` 신호를 올리면 `run_strategy`가 계약으로 변환한다. Strategy는 취소를 몰라도 되고
+Custom Strategy에도 적용된다. 검사는 Provider 호출 **앞**이라 취소 후 LLM 비용이 없다.
+
+프로세스 간 취소는 코어가 하지 않는다 — 앱이 취소 채널을 구독해 자기 `Runtime`을 찾아
+`cancel()`을 부른다. 큐를 코어에 두지 않는 것과 같은 이유다.
+
+## 식별자 — run_id와 execution_id (ADR-0011)
+
+```text
+run_id      01a03c76-a973-…    UUIDv7. 코어가 발급, 프로세스를 넘어 유일. 앱의 id는 받지 않는다
+ └ exec_0                      그 run의 root 노드 — run 안에서만 유일 (run마다 재사용된다)
+    ├ exec_1                   child (같은 run_id)
+    └ exec_2
+```
+
+`result.metadata['run_id']`로 내보내고, 앱은 자기 `task_id` 옆에 적어둔다.
+둘은 1:N이다 — 재시도되면 일감(`task_id`)은 그대로고 시도(`run_id`)가 새로 생긴다.
 
 ## Event System
 

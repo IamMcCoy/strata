@@ -40,6 +40,9 @@ scripts/check_install.sh             # wheel 빌드 → 깨끗한 venv 설치 �
    전부 이 지점에서 일어난다. 한도 초과는 예외가 아니라 `status='budget_exceeded'` 반환.
    **Runtime 인스턴스는 run당 하나** — child는 parent의 Runtime을 공유하고,
    진입점은 `Agent.run(task)` 하나다 (ADR-0006).
+   `run_id`(UUIDv7)는 Runtime이 발급하고 child가 공유한다 — **외부 id를 인자로 받지 않는다**(ADR-0011).
+   취소도 한도와 같은 배관이다: `runtime.cancel()` → `Cancelled` 신호 → `run_strategy`가
+   `status='cancelled'`로 변환(지금까지의 답 포함). 하드 취소(asyncio)는 전파하되 tree에 `cancelled`로 남긴다.
 4. **Child → Parent에는 `AgentResult`(status/result/evidence/metadata) 계약만 전달** —
    child의 전체 Context를 넘기지 않는다 (재귀에서 context 폭발 방지).
 5. **Context(현재 실행 상태) ≠ Conversation(멀티턴) ≠ Memory(실행 간 영속)** (ADR-0002/0010).
