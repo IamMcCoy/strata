@@ -44,7 +44,14 @@ class RedisMemory(Memory):
         커넥션 풀을 하나 새로 만든다 — namespace를 여러 개 쓸 때는 이걸 반복 호출하지 말고
         클라이언트 하나를 만들어 `RedisMemory(client, namespace=...)`로 나눈다.
         """
-        import redis.asyncio as redis  # 지연 import: 이 경로를 쓰는 사용자만 redis가 필요하다
+        try:
+            # 지연 import: 이 경로를 쓰는 사용자만 redis가 필요하다.
+            # 클라이언트를 주입받는 기본 경로는 redis 없이도 동작한다.
+            import redis.asyncio as redis
+        except ImportError as exc:
+            raise ImportError(
+                "RedisMemory.from_url requires the redis package: uv add 'strata[redis]'",
+            ) from exc
         return cls(redis.from_url(url, **kwargs), namespace=namespace)
 
     async def store(self, item: MemoryItem) -> None:
