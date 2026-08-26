@@ -94,18 +94,24 @@ Agent(provider=..., strategy=..., on_delta=lambda text, execution_id: queue.put_
 
 동기 콜백이다: `await`하면 실행이 소비자 속도에 묶인다. 구독자 예외는 삼킨다.
 
-### 구현체
+### 구현체 — 검증 상태를 함께 적는다
 
-| | 방법 |
-|---|---|
-| OpenAI | `OpenAIProvider(model=...)` |
-| vLLM / Ollama | `OpenAIProvider(base_url='http://localhost:8000/v1')` |
-| OpenRouter | `OpenAIProvider(base_url='https://openrouter.ai/api/v1')` |
-| Gemini | `OpenAIProvider(base_url='https://generativelanguage.googleapis.com/v1beta/openai/')` |
-| Claude | `AnthropicProvider(model=...)` — 메시지 형식이 달라 별도 구현 |
+| | 방법 | 실제 엔드포인트 검증 |
+|---|---|---|
+| OpenAI | `OpenAIProvider(model=...)` | ✅ 스트리밍·tool 왕복까지 확인 |
+| Claude | `AnthropicProvider(model=...)` — 메시지 형식이 달라 별도 구현 | ❌ **미검증** (변환 단위 테스트만) |
+| vLLM / Ollama | `OpenAIProvider(base_url='http://localhost:8000/v1')` | ❌ **미검증** |
+| OpenRouter | `OpenAIProvider(base_url='https://openrouter.ai/api/v1')` | ❌ **미검증** |
+| Gemini | `OpenAIProvider(base_url='https://generativelanguage.googleapis.com/v1beta/openai/')` | ❌ **미검증** |
 
-재시도·타임아웃은 SDK에 맡긴다: `Provider(..., max_retries=5, timeout=30)`.
-코어에서 또 재시도하면 백오프가 곱해진다 (ADR-0012).
+**미검증이 뜻하는 것**: 코드는 있고 단위 테스트도 있지만 실제 API로 한 번도 호출하지
+않았다. 특히 확인이 필요한 지점은 **OpenAI 호환 계층이 `stream_options: {include_usage: true}`를
+받는가**다 — 안 받으면 usage가 0으로 새고 `token_budget`이 무의미해진다.
+(실제 호출로만 드러나는 문제의 선례: 스트림 미close로 인한 커넥션 누수, redis.asyncio의
+이벤트 루프 바인딩. 둘 다 fake로는 통과했다.)
+
+재시도는 SDK에 맡긴다: `Provider(..., max_retries=2, timeout=30)` — 명시 인자이며 기본값 2다.
+코어에서 또 재시도하면 백오프가 곱해진다. 총 대기 시간은 대략 `max_retries × timeout` (ADR-0012).
 
 ## Tool
 

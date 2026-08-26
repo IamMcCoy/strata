@@ -109,6 +109,15 @@ Execution Tree 완성 + Event 시스템 (Trace, Logging, Token Usage, Cost).
 - 재시도: SDK의 `max_retries`에 맡긴다 — 코어에서 또 재시도하면 백오프가 곱해진다
 - 완료 기준: `tests/test_streaming.py`, `tests/test_anthropic_provider.py`, `examples/providers.py`
 
+**남은 것 — 실제 엔드포인트 검증.** OpenAI만 실제 API로 확인했다. Claude·Gemini·OpenRouter·
+vLLM은 코드와 단위 테스트만 있고 한 번도 호출하지 않았다
+([검증 상태 표](design/abstractions.md#구현체--검증-상태를-함께-적는다)).
+키가 확보되면 `uv run python examples/providers.py`로 확인한다 — 특히 usage가 새지 않는지.
+
+**재시도의 남은 구멍.** 재시도를 다 쓰면 예외가 root까지 올라가 run이 죽는다.
+부분 결과를 살리려면 Provider 오류를 `status='failed'` 계약으로 변환해야 한다
+(협조적 취소와 같은 배관, ~10줄). 필요해질 때 한다.
+
 ## Phase 7 — Reflection
 
 ```text

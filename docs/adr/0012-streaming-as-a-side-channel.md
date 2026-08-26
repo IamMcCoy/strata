@@ -56,8 +56,9 @@ Anthropic만 별도인 이유는 메시지 형식이 근본적으로 달라서�
 
 ### 재시도
 
-- **코어에 재시도 계층을 두지 않는다.** SDK 설정을 노출만 한다:
-  `OpenAIProvider(..., max_retries=5, timeout=30)`.
+- **코어에 재시도 계층을 두지 않는다.** SDK 설정을 **명시 인자**로 노출한다:
+  `Provider(..., max_retries=2)` — 두 Provider가 같은 이름·같은 기본값(SDK와 동일한 2)을 쓴다.
+  `**client_kwargs`에 묻어 보내지 않는 이유는 발견 가능성이다: 시그니처에 없으면 아무도 안 쓴다.
 - 코어에서 또 재시도하면 SDK 재시도 위에 겹쳐 **백오프가 곱해지고** 실패 하나가
   최대 n×m번 재시도된다. 실제로 부족하다고 **측정되면** 그때 `Runtime.generate`에 단다.
 
@@ -73,5 +74,16 @@ Anthropic만 별도인 이유는 메시지 형식이 근본적으로 달라서�
   보여줘야 하면 그때 확장한다 — 지금은 텍스트가 실사용의 전부다.
 - (−) Gemini는 OpenAI 호환 계층을 거치므로 네이티브 기능(thinking 등)을 못 쓴다.
   필요해지면 그때 네이티브 `GeminiProvider`를 만든다.
-- (−) 재시도를 SDK에 맡기므로 Provider별 재시도 동작이 미묘하게 다를 수 있다.
-  통일이 필요해지면 그때 코어로 올린다.
+- (−) 재시도를 SDK에 맡기므로 Provider별 동작이 미묘하게 다를 수 있고, **재시도가 strata에
+  보이지 않는다** — 로그에도 usage에도 안 잡혀서 "이 run이 왜 40초 걸렸나"의 답이
+  재시도 3회였어도 알 수 없다.
+- (−) **재시도를 다 쓰면 예외가 root까지 올라가 run이 죽는다.** 30분짜리 재귀가 마지막
+  호출의 rate limit으로 통째로 날아가는 시나리오는 그대로다 — 협조적 취소처럼 부분 결과를
+  살리는 경로가 없다. 필요해지면 Provider 오류를 `status='failed'` 계약으로 변환한다
+  (같은 배관, ~10줄).
+- (−) **`AnthropicProvider`와 Gemini/OpenRouter/vLLM 경로는 실제 API로 검증되지 않았다.**
+  메시지 변환은 단위 테스트로 고정했지만 스트리밍 경로와 tool 왕복은 미확인이다.
+  특히 OpenAI 호환 계층이 `stream_options: {include_usage: true}`를 받지 않으면 usage가
+  0으로 새어 `token_budget`이 무력화된다. 키가 확보되면 `examples/providers.py`로 확인한다.
+  (이 프로젝트에서 실제 호출로만 드러난 선례가 이미 둘 있다: 스트림 미close 커넥션 누수,
+  redis.asyncio의 이벤트 루프 바인딩.)

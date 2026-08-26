@@ -96,6 +96,13 @@ def test_response_totals_usage_because_anthropic_does_not():
     assert response.usage == {'input_tokens': 10, 'output_tokens': 5, 'total_tokens': 15}
 
 
+def test_max_retries_reaches_the_client():
+    """OpenAIProvider와 같은 이름·같은 기본값이어야 갈아끼울 때 놀라지 않는다."""
+    from strata import AnthropicProvider
+    assert AnthropicProvider(api_key='k').client.max_retries == 2
+    assert AnthropicProvider(api_key='k', max_retries=5).client.max_retries == 5
+
+
 if __name__ == '__main__':
     test_system_is_lifted_out_of_messages()
     test_tool_calls_become_content_blocks()
@@ -103,4 +110,5 @@ if __name__ == '__main__':
     test_missing_ids_still_round_trip()
     test_tools_use_input_schema_directly()
     test_response_totals_usage_because_anthropic_does_not()
+    test_max_retries_reaches_the_client()
     print('anthropic ok')
