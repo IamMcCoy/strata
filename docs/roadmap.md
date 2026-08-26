@@ -39,12 +39,20 @@ Strategy, merge는 `Runtime.generate`)를 사용자 덮어쓰기 가능하게 �
   들어가고, 모델 코드의 `llm_query` 루프가 조각만 가진 child를 여러 개 띄워 결과를 변수에 모은다.
   child의 system 지시에 자기 조각의 변수 설명이 들어간다.
 
-## Phase 4 — Memory
+## Phase 4 — Memory ✅
 
 `InMemory` 구현 → 이후 Redis / Vector DB / SQL / Custom 을 연결할 수 있도록
-인터페이스 유지. Memory Retrieve / Store lifecycle을 Runtime과 연결.
+인터페이스 유지. Memory Retrieve / Store lifecycle을 Runtime과 연결 —
+retrieve는 `Agent.run`이 자동으로(→ `Context.instructions`), store는 `MemoryTool`로 명시적으로
+([lifecycle 표](design/abstractions.md#lifecycle--흐름은-단방향-adr-0002)).
 
-- 완료 기준: 실행 A에서 store한 정보가 실행 B의 Context에 retrieve되어 주입된다.
+구현체는 `InMemory` / `SQLiteMemory`(stdlib) / `RedisMemory`(클라이언트 주입) 셋 —
+런타임 의존성은 그대로 0개다. MariaDB·Postgres·Vector DB는 코어가 소유하지 않는다
+([근거](design/abstractions.md#구현체--코어가-소유하는-셋)).
+
+- 완료 기준: 실행 A에서 store한 정보가 실행 B의 Context에 retrieve되어 주입된다
+  (`tests/test_memory.py`, `examples/memory.py`).
+- 세 구현이 같은 계약 테스트를 통과한다.
 
 ## Phase 5 — Runtime Control ✅ (Phase 3에서 흡수)
 
