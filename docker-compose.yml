@@ -1,0 +1,15 @@
+# 테스트용 인프라. 서비스 정의는 여기, 명령은 Makefile — 둘은 대체재가 아니다.
+# SQLiteMemory에는 대응 서비스가 없다: 파일 하나라 올릴 서버가 없다.
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: strata-redis
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    tmpfs:
+      - /data          # 테스트 데이터는 디스크에 남기지 않는다
+    healthcheck:       # `docker compose up --wait`가 이걸 기다린다 — 재시도 루프가 필요 없다
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 1s
+      timeout: 3s
+      retries: 15

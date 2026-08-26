@@ -52,7 +52,8 @@ retrieve는 `Agent.run`이 자동으로(→ `Context.instructions`), store는 `M
 
 - 완료 기준: 실행 A에서 store한 정보가 실행 B의 Context에 retrieve되어 주입된다
   (`tests/test_memory.py`, `examples/memory.py`).
-- 세 구현이 같은 계약 테스트를 통과한다.
+- 세 구현이 같은 계약 테스트를 통과한다. 실제 Redis·실제 멀티프로세스 검증은
+  `make test-integration` (`tests/test_memory_integration.py`).
 
 ## 멀티턴 — Phase 4의 곁가지 (ADR-0010)
 
@@ -61,6 +62,10 @@ Memory와 자주 혼동되지만 다른 것이다: 대화 이력은 코어가 �
 
 - 완료 기준: 턴 2가 턴 1의 대화를 보고, child의 `AgentResult`에는 transcript가 실리지 않는다
   (`tests/test_conversation.py`, `examples/conversation.py`).
+- transcript는 순수 JSON이어야 한다 — 앱이 DB·큐에 저장하기 때문이다.
+  큐 + task_id + 멀티 워커 전체 파이프라인은 `examples/worker.py`
+  (검증: `tests/test_pipeline_integration.py`). 큐 자체는 코어에 두지 않는다 — Agent를
+  직렬화할 수 없어 워커가 소유해야 하고, 그러면 브로커 선택은 앱의 몫이 된다.
 
 ## Phase 5 — Runtime Control ✅ (Phase 3에서 흡수)
 
