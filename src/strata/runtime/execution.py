@@ -15,7 +15,7 @@ class ExecutionNode:
     parent_id: str | None = None
     task: str = ''
     depth: int = 0
-    status: str = 'running'  # running | completed | failed | budget_exceeded
+    status: str = 'running'  # running | completed | failed | budget_exceeded | cancelled
     result: AgentResult | None = None
     iterations: int = 0  # 이 노드의 provider 호출 횟수 — max_iterations 집계 단위
     children: list[ExecutionNode] = field(default_factory=list)

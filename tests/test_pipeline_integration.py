@@ -61,6 +61,7 @@ def test_worker_example_runs_the_whole_pipeline():
     assert 'history로 답함' in out, '큐로 실어보낸 history가 다음 턴에 쓰여야 한다'
     assert 'Memory가 워커 경계를 넘었다' in out, 'history 없이 다른 워커가 기억을 읽어야 한다'
     assert '파이프라인 OK' in out
+    assert out.count(' run=01') == 4, f'결과마다 코어가 발급한 run_id가 붙어야 한다:\n{out}'
     assert out.count('처리 시작') == 4, f'작업 4개가 모두 처리돼야 한다:\n{out}'
 
 

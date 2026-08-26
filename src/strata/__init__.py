@@ -15,7 +15,9 @@ from strata.providers.openai import OpenAIProvider
 from strata.runtime.config import RuntimeConfig
 from strata.runtime.execution import ExecutionManager
 from strata.runtime.execution import ExecutionNode
+from strata.runtime.ids import new_run_id
 from strata.runtime.runtime import BudgetExceeded
+from strata.runtime.runtime import Cancelled
 from strata.runtime.runtime import Runtime
 from strata.strategies.base import AgentResult
 from strata.strategies.base import Strategy
@@ -35,6 +37,7 @@ __all__ = [
     'Agent',
     'AgentResult',
     'BudgetExceeded',
+    'Cancelled',
     'Context',
     'ExecutionManager',
     'ExecutionNode',
@@ -61,4 +64,5 @@ __all__ = [
     'Tool',
     'ToolCall',
     'ToolEnv',
+    'new_run_id',
 ]

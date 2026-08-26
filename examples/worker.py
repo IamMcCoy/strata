@@ -105,9 +105,16 @@ async def worker_loop(name: str) -> None:
             print(f"  [{name}] 처리 시작 id={job['id']} · {job['task']!r}", flush=True)
 
             result = await agent.run(job['task'], history=job['history'])
-            payload = {'status': result.status, 'result': result.result, 'messages': result.metadata['messages']}
+            # 앱의 task_id와 코어의 run_id를 잇는 유일한 지점 — 여기서 한 필드로 적어둔다.
+            # 둘은 1:N이다: 워커가 죽어 재시도되면 task_id는 그대로, run_id는 새로 발급된다 (ADR-0011).
+            payload = {
+                'status': result.status,
+                'result': result.result,
+                'messages': result.metadata['messages'],
+                'run_id': result.metadata['run_id'],
+            }
             await client.setex(RESULT.format(job['id']), 3600, json.dumps(payload))
-            print(f"  [{name}] 완료   id={job['id']} → {result.result!r}", flush=True)
+            print(f"  [{name}] 완료   id={job['id']} run={payload['run_id'][:13]} → {result.result!r}", flush=True)
     finally:
         await client.aclose()
 

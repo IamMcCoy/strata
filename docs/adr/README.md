@@ -17,6 +17,7 @@
 | [0008](0008-all-primitives-through-runtime.md) | LLM 호출을 포함한 세 primitive는 모두 Runtime을 경유한다 (runtime.generate) | Accepted |
 | [0009](0009-strategy-prompt-seam-and-model-params.md) | 패턴 지시는 Strategy.prompt(고정)+environment(동적), 모델 파라미터 우선순위(Strategy > Provider)는 Runtime.generate 한 줄 | Accepted |
 | [0010](0010-conversation-history-is-not-core-state.md) | 대화 이력은 코어가 소유하지 않는다 — Agent.run(task, history=...)로 주고받는다 | Accepted |
+| [0011](0011-run-id-and-two-kinds-of-cancellation.md) | run_id는 코어가 발급하고 외부 id를 받지 않는다 — 취소는 하드/협조적 두 종류 | Accepted |
 
 ## 템플릿
 

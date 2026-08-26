@@ -67,6 +67,15 @@ Memory와 자주 혼동되지만 다른 것이다: 대화 이력은 코어가 �
   (검증: `tests/test_pipeline_integration.py`). 큐 자체는 코어에 두지 않는다 — Agent를
   직렬화할 수 없어 워커가 소유해야 하고, 그러면 브로커 선택은 앱의 몫이 된다.
 
+## 취소와 식별자 — Phase 6의 전제 (ADR-0011)
+
+`run_id`(UUIDv7)를 코어가 발급한다. `exec_0`은 run마다 재사용되므로 그것만으로는
+프로세스·run을 넘는 기록이 뒤섞인다 — 로깅·실행 기록 영속화의 전제다.
+취소는 하드(asyncio)와 협조적(`runtime.cancel()`) 두 종류이며, 후자는 이미 쓴 토큰을 살린다.
+
+- 완료 기준: 협조적 취소가 부분 결과를 반환하고 새 child를 막으며, 하드 취소가
+  tree에 `cancelled`로 남는다 (`tests/test_cancellation.py`, `tests/test_ids.py`).
+
 ## Phase 5 — Runtime Control ✅ (Phase 3에서 흡수)
 
 `max_depth`, `max_iterations`, `max_children`, `token_budget`, `timeout` 전체 지원 —
