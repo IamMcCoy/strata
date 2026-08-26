@@ -19,6 +19,10 @@ class ToolCall:
     name: str
     arguments: dict
     id: str | None = None
+    # 코어가 해석하지 않고 그대로 왕복시키는 벤더 전용 상태. 의미는 Provider만 안다.
+    # 예: Gemini 3.x는 function_call part의 thought_signature를 다음 턴에 돌려받아야 한다.
+    # messages에 실려 앱의 저장소를 왕복하므로 **JSON 직렬화 가능한 값만** 넣는다 (ADR-0010).
+    provider_state: dict = field(default_factory=dict)
 
 
 @dataclass
