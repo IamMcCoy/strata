@@ -60,11 +60,14 @@ class Runtime:
     Provider/Tool/Memory/Child Agent에 접근한다 — 한도·집계·이벤트가 전부 여기서 일어난다.
     """
 
-    def __init__(self, provider=None, tools=None, memory=None, config=None):
+    def __init__(self, provider=None, tools=None, memory=None, config=None, on_delta=None):
         # run 하나의 유일한 이름. child는 spawn에서 이 Runtime을 공유하므로 run_id도 공유한다
         # — 재귀 전체가 하나의 run이다 (ADR-0011).
         self.run_id: str = new_run_id()
         self.cancelled: str | None = None  # 협조적 취소 플래그 — cancel()이 세운다
+        # on_delta(text, execution_id) — 스트리밍의 부수 채널. child도 Runtime을 공유하므로
+        # 재귀 전체의 토큰이 하나의 콜백으로 흐르고, execution_id로 누가 말하는지 갈린다 (ADR-0012).
+        self.on_delta = on_delta
         self.provider = provider
         self.tools: dict[str, Tool] = {t.name: t for t in (tools or [])}
         self.memory = memory
@@ -82,6 +85,22 @@ class Runtime:
         """
         self.cancelled = reason
         logger.info('run=%s cancel requested reason=%s', self.run_id, reason)
+
+    def _delta_sink(self, context):
+        """Provider에 넘길 콜백. execution_id는 여기서 붙인다 — Provider는 실행 트리를 모른다.
+
+        구독자 예외를 삼킨다: 관찰이 실행을 죽이지 않는다(로깅과 같은 원칙).
+        """
+        if self.on_delta is None:
+            return None
+        execution_id = _exec_id(context)
+
+        def sink(text: str) -> None:
+            try:
+                self.on_delta(text, execution_id)
+            except Exception:
+                logger.debug('run=%s on_delta 구독자가 예외를 냈다 — 무시한다', self.run_id, exc_info=True)
+        return sink
 
     def _check_stop(self) -> None:
         """취소·토큰 예산 검사. generate와 spawn_agent가 공유하는 관문."""
@@ -125,6 +144,11 @@ class Runtime:
             'run=%s exec=%s provider.request messages=%d tools=%d',
             self.run_id, _exec_id(context), len(messages), len(tools or []),
         )
+        # on_delta는 None일 때 아예 넘기지 않는다 — 스트리밍을 안 쓰는 Provider 구현이
+        # 시그니처를 몰라도 되고, 호출 kwargs가 지저분해지지 않는다.
+        sink = self._delta_sink(context)
+        if sink is not None:
+            kwargs = {**kwargs, 'on_delta': sink}
         response = await self.provider.generate(messages, tools=tools, **{**self.provider.model_params, **kwargs})
         logger.debug(
             'run=%s exec=%s provider.response tokens=%s tool_calls=%d',

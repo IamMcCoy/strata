@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+from collections.abc import Callable
 from typing import Any
 
 from strata.providers.base import ModelResponse
@@ -78,13 +79,59 @@ def _to_model_response(completion: Any) -> ModelResponse:
     return ModelResponse(text=message.content, tool_calls=tool_calls, usage=usage, raw=completion)
 
 
+async def _consume_stream(stream: Any, on_delta: Callable[[str], None] | None) -> ModelResponse:
+    """스트리밍 청크를 모아 완결된 ModelResponse로 만든다.
+
+    tool_calls는 조각으로 온다 — index별로 name과 arguments 문자열을 이어 붙여야 한다.
+    usage는 마지막 청크에만 실린다(stream_options include_usage). 그 청크는 choices가 비어 있다.
+    """
+    text_parts: list[str] = []
+    calls: dict[int, dict] = {}
+    usage: dict = {}
+    async for chunk in stream:
+        if getattr(chunk, 'usage', None):
+            usage = {
+                'input_tokens': chunk.usage.prompt_tokens,
+                'output_tokens': chunk.usage.completion_tokens,
+                'total_tokens': chunk.usage.total_tokens,
+            }
+        if not chunk.choices:
+            continue
+        delta = chunk.choices[0].delta
+        if getattr(delta, 'content', None):
+            text_parts.append(delta.content)
+            if on_delta is not None:
+                on_delta(delta.content)
+        for part in (getattr(delta, 'tool_calls', None) or []):
+            call = calls.setdefault(part.index, {'id': None, 'name': '', 'arguments': ''})
+            call['id'] = part.id or call['id']
+            if part.function is not None:
+                call['name'] = part.function.name or call['name']
+                call['arguments'] += part.function.arguments or ''
+
+    tool_calls = [
+        ToolCall(name=c['name'], arguments=json.loads(c['arguments'] or '{}'), id=c['id'])
+        for _, c in sorted(calls.items())
+    ]
+    return ModelResponse(text=''.join(text_parts) or None, tool_calls=tool_calls, usage=usage)
+
+
 class OpenAIProvider(Provider):
     """OpenAI 및 OpenAI-compatible API (vLLM, Ollama 등은 base_url만 지정).
+
+    OpenAI-compatible 엔드포인트는 base_url만 바꾸면 그대로 동작한다 — 같은 코드다:
+
+        vLLM        base_url='http://localhost:8000/v1'
+        Ollama      base_url='http://localhost:11434/v1'
+        OpenRouter  base_url='https://openrouter.ai/api/v1'
+        Gemini      base_url='https://generativelanguage.googleapis.com/v1beta/openai/'
 
     api_key 우선순위: 명시적 인자 > OPENAI_API_KEY 환경변수.
     프레임워크는 키를 저장·로깅하지 않고 SDK에 전달만 한다.
     model_params: 기본 샘플링 파라미터(temperature, max_tokens 등) — 합치기는 Runtime.generate가 한다.
-    client_kwargs는 AsyncOpenAI 생성자로 간다.
+    client_kwargs는 AsyncOpenAI 생성자로 간다 — 재시도·타임아웃도 여기다:
+    `OpenAIProvider(..., max_retries=5, timeout=30)`. SDK가 429·5xx·연결 오류를 지수 백오프로
+    재시도하므로 코어에 재시도 계층을 따로 두지 않는다 (ADR-0012).
     """
 
     def __init__(
@@ -113,6 +160,7 @@ class OpenAIProvider(Provider):
         self,
         messages: list[dict],
         tools: list[Tool] | None = None,
+        on_delta: Callable[[str], None] | None = None,
         **kwargs: Any,
     ) -> ModelResponse:
         request: dict[str, Any] = {
@@ -123,5 +171,13 @@ class OpenAIProvider(Provider):
         openai_tools = _to_openai_tools(tools)
         if openai_tools:
             request['tools'] = openai_tools
-        completion = await self.client.chat.completions.create(**request)
-        return _to_model_response(completion)
+        if on_delta is None:
+            # 스트리밍이 필요 없으면 굳이 쓰지 않는다 — 응답이 한 번에 오고 usage도 그냥 실린다
+            return _to_model_response(await self.client.chat.completions.create(**request))
+        # include_usage: 스트리밍에서는 마지막 청크에만 usage가 실린다. 없으면 token_budget이 0으로 샌다.
+        request['stream'] = True
+        request['stream_options'] = {'include_usage': True}
+        # async with로 닫는다 — 끝까지 순회해도 HTTP 응답은 자동으로 닫히지 않는다.
+        # 안 닫으면 스트리밍 호출마다 커넥션이 새고 GC 시점에 finalizer가 터진다.
+        async with await self.client.chat.completions.create(**request) as stream:
+            return await _consume_stream(stream, on_delta)

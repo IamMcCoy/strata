@@ -78,6 +78,35 @@ ReActStrategy(model_params={'temperature': 0})             # 패턴별 값 — �
   코어는 의존성 0을 유지하고, SDK import는 Provider 생성 시점에 일어나므로
   extras 없이도 `import strata`는 동작한다.
 
+### 스트리밍 — 부수 채널 (ADR-0012)
+
+```python
+async def generate(self, messages, tools=None, on_delta=None, **kwargs) -> ModelResponse
+```
+
+`on_delta`를 줘도 **반환은 완결된 `ModelResponse`다.** 그래서 Strategy는 스트리밍을 몰라도
+되고 한도·usage 집계가 한 경로로 유지된다. 앱이 보는 시그니처는 `on_delta(text, execution_id)` —
+`execution_id`는 Runtime이 붙인다(Provider는 실행 트리를 모른다).
+
+```python
+Agent(provider=..., strategy=..., on_delta=lambda text, execution_id: queue.put_nowait(text))
+```
+
+동기 콜백이다: `await`하면 실행이 소비자 속도에 묶인다. 구독자 예외는 삼킨다.
+
+### 구현체
+
+| | 방법 |
+|---|---|
+| OpenAI | `OpenAIProvider(model=...)` |
+| vLLM / Ollama | `OpenAIProvider(base_url='http://localhost:8000/v1')` |
+| OpenRouter | `OpenAIProvider(base_url='https://openrouter.ai/api/v1')` |
+| Gemini | `OpenAIProvider(base_url='https://generativelanguage.googleapis.com/v1beta/openai/')` |
+| Claude | `AnthropicProvider(model=...)` — 메시지 형식이 달라 별도 구현 |
+
+재시도·타임아웃은 SDK에 맡긴다: `Provider(..., max_retries=5, timeout=30)`.
+코어에서 또 재시도하면 백오프가 곱해진다 (ADR-0012).
+
 ## Tool
 
 Agent가 외부 시스템·환경과 상호작용하기 위한 abstraction.

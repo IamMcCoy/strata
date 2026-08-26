@@ -14,7 +14,7 @@ openai = ["openai>=1.50"]
 
 [dependency-groups]
 # redis는 dev 전용 — RedisMemory는 클라이언트를 주입받으므로 런타임 의존성이 아니다
-dev = ["pytest", "pre-commit", "openai>=1.50", "python-dotenv", "redis>=5"]
+dev = ["pytest", "pre-commit", "openai>=1.50", "anthropic>=0.40", "python-dotenv", "redis>=5"]
 
 [tool.mypy]
 python_version = "3.12"
