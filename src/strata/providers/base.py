@@ -12,6 +12,18 @@ from typing import Any
 from strata.tools.base import Tool
 
 
+class ProviderError(Exception):
+    """LLM 인프라 오류 — Provider가 SDK 예외를 이걸로 번역한다 (ADR-0013).
+
+    코어가 `openai`/`anthropic`을 import하지 않고도 **인프라 오류와 프로그래밍 오류를**
+    가르기 위한 것이다. 429·5xx·타임아웃·연결 끊김·인증 실패는 내 코드의 버그가 아니므로
+    run을 폭발시키지 않고 지금까지의 답과 함께 `status='failed'` 계약으로 끝낸다.
+    반면 Strategy의 TypeError 같은 프로그래밍 오류는 그대로 전파된다 — 사용자가 봐야 한다.
+
+    벤더 번역이 Provider의 책임인 것은 usage 표준 키·메시지 형식과 같은 이유다.
+    """
+
+
 @dataclass
 class ToolCall:
     """모델이 요청한 tool 호출. Provider가 자사 형식을 이 형태로 통일한다."""

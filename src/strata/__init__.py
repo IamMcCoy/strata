@@ -13,7 +13,9 @@ from strata.memory.sqlite import SQLiteMemory
 from strata.providers.anthropic import AnthropicProvider
 from strata.providers.base import ModelResponse
 from strata.providers.base import Provider
+from strata.providers.base import ProviderError
 from strata.providers.base import ToolCall
+from strata.providers.fallback import FallbackProvider
 from strata.providers.gemini import GeminiProvider
 from strata.providers.openai import OpenAIProvider
 from strata.runtime.config import RuntimeConfig
@@ -50,6 +52,7 @@ __all__ = [
     'Context',
     'ExecutionManager',
     'ExecutionNode',
+    'FallbackProvider',
     'GeminiProvider',
     'InMemory',
     'Memory',
@@ -58,6 +61,7 @@ __all__ = [
     'ModelResponse',
     'OpenAIProvider',
     'Provider',
+    'ProviderError',
     'PythonTool',
     'REACT_PROMPT',
     'RECURSIVE_PROMPT',

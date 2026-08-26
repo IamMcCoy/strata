@@ -19,6 +19,7 @@
 | [0010](0010-conversation-history-is-not-core-state.md) | 대화 이력은 코어가 소유하지 않는다 — Agent.run(task, history=...)로 주고받는다 | Accepted |
 | [0011](0011-run-id-and-two-kinds-of-cancellation.md) | run_id는 코어가 발급하고 외부 id를 받지 않는다 — 취소는 하드/협조적 두 종류 | Accepted |
 | [0012](0012-streaming-as-a-side-channel.md) | 스트리밍은 콜백(부수 채널)이지 반환 계약이 아니다 — 재시도는 SDK에 맡긴다 | Accepted |
+| [0013](0013-provider-errors-become-a-result-contract.md) | 인프라 오류는 결과 계약으로, 프로그래밍 오류는 그대로 — 번역은 Provider가 한다 | Accepted |
 
 ## 템플릿
 

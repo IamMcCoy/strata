@@ -116,9 +116,9 @@ vLLM은 스트리밍·usage까지 실제로 확인했다(tool은 서버가 `--en
 ([검증 상태 표](design/abstractions.md#구현체--검증-상태를-함께-적는다)).
 키가 확보되면 `uv run python examples/providers.py`로 확인한다 — 특히 usage가 새지 않는지.
 
-**재시도의 남은 구멍.** 재시도를 다 쓰면 예외가 root까지 올라가 run이 죽는다.
-부분 결과를 살리려면 Provider 오류를 `status='failed'` 계약으로 변환해야 한다
-(협조적 취소와 같은 배관, ~10줄). 필요해질 때 한다.
+**재시도의 남은 구멍 — 해소됨(ADR-0013).** Provider가 SDK 예외를 `ProviderError`로 번역하고
+`run_strategy`가 계약으로 변환한다. 인프라 오류는 지금까지의 답과 함께 `status='failed'`로
+끝나고, 프로그래밍 오류는 그대로 전파된다. 폴백은 `FallbackProvider`로 코어 밖에 둔다.
 
 ## Phase 7 — Reflection
 

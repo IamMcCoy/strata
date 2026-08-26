@@ -7,6 +7,7 @@ from typing import Any
 
 from strata.providers.base import ModelResponse
 from strata.providers.base import Provider
+from strata.providers.base import ProviderError
 from strata.providers.base import ToolCall
 from strata.tools.base import Tool
 
@@ -147,6 +148,8 @@ class OpenAIProvider(Provider):
     ):
         try:
             from openai import AsyncOpenAI
+            import openai as _openai
+            self._api_error = _openai.APIError
         except ImportError as exc:  # 코어는 의존성 0 — openai는 optional extra
             raise ImportError(
                 "OpenAIProvider requires the openai package: uv add 'strata[openai]'",
@@ -161,6 +164,22 @@ class OpenAIProvider(Provider):
         )
 
     async def generate(
+        self,
+        messages: list[dict],
+        tools: list[Tool] | None = None,
+        on_delta: Callable[[str], None] | None = None,
+        **kwargs: Any,
+    ) -> ModelResponse:
+        """SDK 예외를 ProviderError로 번역한다 — 코어가 벤더를 몰라도 인프라 오류를 가른다 (ADR-0013).
+
+        재시도는 SDK가 이미 했다. 여기 오는 건 재시도까지 소진된 상태다.
+        """
+        try:
+            return await self._call(messages, tools=tools, on_delta=on_delta, **kwargs)
+        except self._api_error as exc:
+            raise ProviderError(f'{type(exc).__name__}: {exc}') from exc
+
+    async def _call(
         self,
         messages: list[dict],
         tools: list[Tool] | None = None,
