@@ -22,9 +22,9 @@ def _to_openai_messages(messages: list[dict]) -> list[dict]:
                 entry['tool_calls'] = [
                     {
                         # id 없는 fake 응답도 왕복되도록 결정적 fallback
-                        'id': call.id or f'call_{i}',
+                        'id': call.get('id') or f'call_{i}',
                         'type': 'function',
-                        'function': {'name': call.name, 'arguments': json.dumps(call.arguments)},
+                        'function': {'name': call['name'], 'arguments': json.dumps(call['arguments'])},
                     }
                     for i, call in enumerate(tool_calls)
                 ]

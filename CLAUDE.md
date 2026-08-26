@@ -42,8 +42,11 @@ scripts/check_install.sh             # wheel 빌드 → 깨끗한 venv 설치 �
    진입점은 `Agent.run(task)` 하나다 (ADR-0006).
 4. **Child → Parent에는 `AgentResult`(status/result/evidence/metadata) 계약만 전달** —
    child의 전체 Context를 넘기지 않는다 (재귀에서 context 폭발 방지).
-5. **Context(현재 실행 상태) ≠ Memory(실행 간 영속)** (ADR-0002).
+5. **Context(현재 실행 상태) ≠ Conversation(멀티턴) ≠ Memory(실행 간 영속)** (ADR-0002/0010).
    흐름은 `Memory → retrieve → Context → Strategy` 단방향.
+   대화 이력은 코어가 소유하지 않는다 — `Agent.run(task, history=...)`로 받고
+   `result.metadata['messages']`로 돌려준다. 대화를 `Memory`에 쌓지 않는다(retrieve에 순서가 없다).
+   transcript는 `Agent.run`에만 붙인다 — child의 `AgentResult`에 실으면 불변식 4가 깨진다.
 6. I/O 경계(Provider, Tool, Memory, spawn)는 모두 `async def`.
 7. **Tool은 `execute(self, env: ToolEnv, **kwargs)`** — Runtime에 닿는 유일한 길(ADR-0007).
    재귀의 트리거(`SpawnAgentTool`, `PythonTool.llm_query`)도 Tool이지만 메커니즘은 `env.runtime.spawn_agent()`.
