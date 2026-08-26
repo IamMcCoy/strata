@@ -51,6 +51,9 @@ scripts/check_install.sh             # wheel 빌드 → 깨끗한 venv 설치 �
    `result.metadata['messages']`로 돌려준다. 대화를 `Memory`에 쌓지 않는다(retrieve에 순서가 없다).
    transcript는 `Agent.run`에만 붙인다 — child의 `AgentResult`에 실으면 불변식 4가 깨진다.
 6. I/O 경계(Provider, Tool, Memory, spawn)는 모두 `async def`.
+   관찰은 stdlib `logging` — 라이브러리는 `NullHandler`만 달고 설정하지 않는다.
+   모든 줄에 `run=`/`exec=`를 붙이고 `%s` 지연 포매팅을 쓴다(레벨이 꺼지면 비용 0).
+   토큰은 `Runtime.usage`(총합)와 `ExecutionNode.usage`(노드별) 두 층이다.
 7. **Tool은 `execute(self, env: ToolEnv, **kwargs)`** — Runtime에 닿는 유일한 길(ADR-0007).
    재귀의 트리거(`SpawnAgentTool`, `PythonTool.llm_query`)도 Tool이지만 메커니즘은 `env.runtime.spawn_agent()`.
 8. system 지시는 `Context.instructions`(messages와 분리), 거대 입력은 `Context.variables['context']`

@@ -1,6 +1,8 @@
 """Strata — A composable runtime for agentic systems."""
 from __future__ import annotations
 
+import logging
+
 from strata.agent.agent import Agent
 from strata.agent.context import Context
 from strata.memory.base import Memory
@@ -32,6 +34,10 @@ from strata.tools.base import ToolEnv
 from strata.tools.memory import MemoryTool
 from strata.tools.python import PythonTool
 from strata.tools.spawn import SpawnAgentTool
+
+# 라이브러리는 로그를 설정하지 않는다 — 핸들러가 없을 때 조용하도록 NullHandler만 단다.
+# 앱이 켠다: logging.basicConfig(level=logging.DEBUG)
+logging.getLogger(__name__).addHandler(logging.NullHandler())
 
 __all__ = [
     'Agent',

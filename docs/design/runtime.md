@@ -165,6 +165,33 @@ run_id      01a03c76-a973-…    UUIDv7. 코어가 발급, 프로세스를 넘�
 `result.metadata['run_id']`로 내보내고, 앱은 자기 `task_id` 옆에 적어둔다.
 둘은 1:N이다 — 재시도되면 일감(`task_id`)은 그대로고 시도(`run_id`)가 새로 생긴다.
 
+## 로깅 — 지금 있는 관찰 수단
+
+`logging` 표준 라이브러리를 쓴다. 라이브러리는 핸들러를 설정하지 않고 `NullHandler`만 달며,
+앱이 켠다: `logging.basicConfig(level=logging.DEBUG)`.
+
+```text
+run=01a03c7b-… exec=exec_0 agent.started task=루트 작업
+run=01a03c7b-… exec=exec_0 provider.response tokens=10 tool_calls=0
+run=01a03c7b-… exec=exec_2 agent.spawned parent=exec_0 depth=1 task=비싼 조각
+run=01a03c7b-… exec=exec_0 agent.finished status=completed tokens=115
+```
+
+- 모든 줄에 `run=`/`exec=`가 붙는다 — 워커가 여럿이면 그것 없이는 줄을 실행 단위로 묶을 수 없다.
+- 레벨은 두 개뿐이다: run 시작/종료·취소 요청은 `INFO`, primitive 단위는 `DEBUG`.
+- `%s` 지연 포매팅을 쓴다 — 레벨이 꺼져 있으면 문자열을 만들지도 않는다.
+- 구조화 필드(`extra=`)는 붙이지 않는다. 기본 포매터가 출력하지 않으므로 지금은
+  *사람이 읽는* 추적이 목적이다. **프로그램이 소비할 구조화 스트림이 필요해지는 시점이
+  Event 시스템을 만들 시점이다** — 로그를 파싱해야 하는 사람이 생기면 그때다.
+
+### 토큰은 두 층으로 센다
+
+| | 어디 | 무엇 |
+|---|---|---|
+| run 총합 | `Runtime.usage` | 예산(`token_budget`) 판정 기준 |
+| 노드별 | `ExecutionNode.usage` | 그 노드가 **직접** 쓴 것 |
+| 가지 합계 | `ExecutionNode.subtree_usage()` | 자신 + 모든 자손 — 재귀에서 "어느 가지가 비쌌나" |
+
 ## Event System
 
 Runtime의 주요 lifecycle을 Event로 노출한다 (Phase 6). 발행 지점은 세 primitive와

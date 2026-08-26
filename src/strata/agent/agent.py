@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from typing import Any
 
 from strata.agent.context import Context
 from strata.runtime.config import RuntimeConfig
 from strata.runtime.runtime import Runtime
 from strata.strategies.base import AgentResult
+
+logger = logging.getLogger(__name__)
 
 
 class Agent:
@@ -43,6 +46,8 @@ class Agent:
         if self.memory is None:
             return self.instructions
         items = await self.memory.retrieve(task)
+        # 조회어와 적중 수 — retrieve가 왜 빗나갔는지는 이 두 값 없이는 추측밖에 못 한다
+        logger.debug('memory.retrieve query=%.60s hits=%d', task, len(items))
         if not items:
             return self.instructions
         recalled = '\n'.join(f'- {item.content}' for item in items)
@@ -62,6 +67,7 @@ class Agent:
         )
         runtime.default_strategy = self.strategy  # spawn 시 strategy 미지정이면 상속 (ADR-0006)
         node = runtime.execution.open(task)
+        logger.info('run=%s exec=%s agent.started task=%.80s', runtime.run_id, node.id, task)
         ctx = Context(
             messages=[*(history or []), {'role': 'user', 'content': task}],
             instructions=await self._recall(task),
@@ -93,4 +99,8 @@ class Agent:
         # 인자로 받지 않는다 — 외부 문자열에 유일성을 의존시키지 않는다 (ADR-0011).
         result.metadata['run_id'] = runtime.run_id
         runtime.execution.close(node.id, result)
+        logger.info(
+            'run=%s exec=%s agent.finished status=%s tokens=%s',
+            runtime.run_id, node.id, result.status, runtime.usage['total_tokens'],
+        )
         return result

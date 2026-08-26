@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from strata.memory.base import MemoryItem
 from strata.tools.base import Tool
 from strata.tools.base import ToolEnv
+
+logger = logging.getLogger(__name__)
 
 
 class MemoryTool(Tool):
@@ -36,4 +39,5 @@ class MemoryTool(Tool):
         if env.runtime.memory is None:
             return 'No memory is configured for this agent; nothing was saved.'
         await env.runtime.memory.store(MemoryItem(content=content, type=type))
+        logger.debug('run=%s memory.store type=%s content=%.60s', env.runtime.run_id, type, content)
         return f'Remembered: {content}'

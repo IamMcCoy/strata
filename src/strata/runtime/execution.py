@@ -6,6 +6,8 @@ from dataclasses import field
 
 from strata.strategies.base import AgentResult
 
+USAGE_KEYS = ('input_tokens', 'output_tokens', 'total_tokens')
+
 
 @dataclass
 class ExecutionNode:
@@ -18,7 +20,18 @@ class ExecutionNode:
     status: str = 'running'  # running | completed | failed | budget_exceeded | cancelled
     result: AgentResult | None = None
     iterations: int = 0  # 이 노드의 provider 호출 횟수 — max_iterations 집계 단위
+    # 이 노드가 직접 쓴 토큰. run 전체 합계는 Runtime.usage에 따로 있다 —
+    # 재귀에서 "어느 가지가 비쌌나"는 노드별로만 알 수 있다.
+    usage: dict[str, int] = field(default_factory=lambda: dict.fromkeys(USAGE_KEYS, 0))
     children: list[ExecutionNode] = field(default_factory=list)
+
+    def subtree_usage(self) -> dict[str, int]:
+        """자신 + 모든 자손의 토큰 합. child를 여럿 띄운 가지의 진짜 비용이다."""
+        total = dict(self.usage)
+        for child in self.children:
+            for key, amount in child.subtree_usage().items():
+                total[key] += amount
+        return total
 
 
 class ExecutionManager:
