@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import logging
 from collections.abc import Mapping
 from typing import Any
 
@@ -8,13 +9,16 @@ from strata.agent.context import Context
 from strata.providers.base import ModelResponse
 from strata.runtime.config import RuntimeConfig
 from strata.runtime.execution import ExecutionManager
+from strata.runtime.execution import USAGE_KEYS
 from strata.runtime.ids import new_run_id
 from strata.strategies.base import AgentResult
 from strata.strategies.base import Strategy
 from strata.tools.base import Tool
 from strata.tools.base import ToolEnv
 
-USAGE_KEYS = ('input_tokens', 'output_tokens', 'total_tokens')
+# 라이브러리는 핸들러를 붙이지 않는다 — 앱이 logging.basicConfig()로 켠다.
+# 모든 줄에 run=/exec=가 붙는다: 워커가 여럿이면 그것 없이는 줄을 실행 단위로 묶을 수 없다.
+logger = logging.getLogger(__name__)
 
 
 class BudgetExceeded(Exception):
@@ -28,6 +32,11 @@ class BudgetExceeded(Exception):
         super().__init__(f'{reason} limit exceeded: {limit}')
         self.reason = reason
         self.limit = limit
+
+
+def _exec_id(context) -> str | None:
+    """로그 줄을 Execution Tree의 노드에 이어주는 값."""
+    return context.metadata.get('execution_id') if context is not None else None
 
 
 class Cancelled(Exception):
@@ -72,6 +81,7 @@ class Runtime:
         이쪽은 이미 쓴 토큰을 살린다. 실행 중인 tool은 끝까지 기다린다.
         """
         self.cancelled = reason
+        logger.info('run=%s cancel requested reason=%s', self.run_id, reason)
 
     def _check_stop(self) -> None:
         """취소·토큰 예산 검사. generate와 spawn_agent가 공유하는 관문."""
@@ -111,9 +121,20 @@ class Runtime:
         if system:
             messages = [{'role': 'system', 'content': system}, *messages]
 
+        logger.debug(
+            'run=%s exec=%s provider.request messages=%d tools=%d',
+            self.run_id, _exec_id(context), len(messages), len(tools or []),
+        )
         response = await self.provider.generate(messages, tools=tools, **{**self.provider.model_params, **kwargs})
+        logger.debug(
+            'run=%s exec=%s provider.response tokens=%s tool_calls=%d',
+            self.run_id, _exec_id(context), response.usage.get('total_tokens'), len(response.tool_calls),
+        )
         for key in USAGE_KEYS:
-            self.usage[key] += int(response.usage.get(key, 0) or 0)
+            amount = int(response.usage.get(key, 0) or 0)
+            self.usage[key] += amount
+            if node is not None:
+                node.usage[key] += amount
         return response
 
     # ---- primitive 2: Tool 실행 ---------------------------------------------------
@@ -134,13 +155,26 @@ class Runtime:
         registry = tools if tools is not None else self.tools
         tool = registry.get(name)
         if tool is None:
+            logger.debug('run=%s exec=%s tool.missing name=%s', self.run_id, _exec_id(context), name)
             return f"Tool '{name}' not found. Available: {sorted(registry)}"
+        logger.debug(
+            'run=%s exec=%s tool.started name=%s args=%s',
+            self.run_id, _exec_id(context), name, sorted(arguments),
+        )
         try:
-            return await tool.execute(ToolEnv(context=context, runtime=self), **arguments)
-        except BudgetExceeded:
+            observation = await tool.execute(ToolEnv(context=context, runtime=self), **arguments)
+        except (BudgetExceeded, Cancelled):
+            # 한도·취소 신호는 관찰로 바꾸지 않는다 — SpawnAgentTool처럼 Tool 안에서 spawn을
+            # 호출하는 경우 여기서 삼키면 취소가 먹지 않는다 (ADR-0007/0011).
             raise
         except Exception as exc:
+            logger.debug(
+                'run=%s exec=%s tool.failed name=%s error=%r',
+                self.run_id, _exec_id(context), name, exc,
+            )
             return f'Tool {name!r} failed: {exc!r}'
+        logger.debug('run=%s exec=%s tool.finished name=%s', self.run_id, _exec_id(context), name)
+        return observation
 
     # ---- primitive 3: Child Agent -------------------------------------------------
 
@@ -185,6 +219,10 @@ class Runtime:
             return AgentResult(status='failed', result='no strategy to inherit for child agent')
 
         node = self.execution.open(task, parent_id=parent.id)
+        logger.debug(
+            'run=%s exec=%s agent.spawned parent=%s depth=%d task=%.60s',
+            self.run_id, node.id, parent.id, node.depth, task,
+        )
         child_context = Context(
             messages=[{'role': 'user', 'content': task}],
             instructions=instructions if instructions is not None else parent_context.instructions,
@@ -202,6 +240,10 @@ class Runtime:
         except Exception as exc:  # child 실패가 parent를 죽이지 않는다 — 계약으로 변환
             result = AgentResult(status='failed', result=repr(exc))
         self.execution.close(node.id, result)
+        logger.debug(
+            'run=%s exec=%s agent.completed status=%s tokens=%s',
+            self.run_id, node.id, result.status, node.subtree_usage()['total_tokens'],
+        )
         return result
 
     # ---- 공통 실행 경로 ---------------------------------------------------------------

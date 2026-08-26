@@ -91,6 +91,12 @@ Memory와 자주 혼동되지만 다른 것이다: 대화 이력은 코어가 �
 
 Execution Tree 완성 + Event 시스템 (Trace, Logging, Token Usage, Cost).
 
+먼저 **Event 없이 되는 것부터** 했다 — 로깅(stdlib `logging`)과 노드별 토큰
+(`ExecutionNode.usage` / `subtree_usage()`). 관찰자가 하나면 Event는 필요 없다;
+서로를 모르는 관찰자가 둘 이상 붙어야, 또는 로그를 **프로그램이 파싱**해야 할 때
+비로소 Event가 값을 한다. 그 사람이 생기면 그때 만든다
+(`examples/observability.py`, `tests/test_observability.py`).
+
 - 완료 기준: [runtime.md](design/runtime.md#event-system)의 이벤트 전체가 발행되고,
   구독자 하나로 실행 전체의 토큰 사용량을 집계할 수 있다.
 
