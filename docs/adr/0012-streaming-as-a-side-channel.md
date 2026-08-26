@@ -48,8 +48,15 @@
 | OpenRouter | `OpenAIProvider(base_url='https://openrouter.ai/api/v1')` |
 | Gemini | `OpenAIProvider(base_url='https://generativelanguage.googleapis.com/v1beta/openai/')` |
 | **Claude** | `AnthropicProvider` — **별도 구현** |
+| **Gemini** | `GeminiProvider` — **별도 구현**(네이티브 SDK). 호환 경로도 남긴다 |
 
-Anthropic만 별도인 이유는 메시지 형식이 근본적으로 달라서다: system이 메시지가 아니라
+Gemini에 네이티브 구현을 두되 `client.aio.models.generate_content(_stream)` 위에 올린다.
+`client.interactions`(next-gen API)를 쓰지 않는 이유는 그것이 `agents`/`environments`/
+`triggers`/`webhooks`와 함께 있는 **구글의 agent 실행 API**이기 때문이다 — strata와 같은 층의
+추상화라 Provider로 감싸면 Runtime의 한도·usage·재귀 제어가 구글 쪽 상태와 이중으로 겹친다.
+Provider가 필요로 하는 것은 무상태 완성 호출이다.
+
+Anthropic이 별도인 이유는 메시지 형식이 근본적으로 달라서다: system이 메시지가 아니라
 최상위 파라미터고, tool 호출/결과가 role이 아니라 content block이며, tool 결과는
 `role='user'`의 `tool_result` 블록으로 들어간다. 그리고 `total_tokens`를 주지 않아
 `token_budget` 집계를 위해 Provider가 합을 만든다.
@@ -72,8 +79,10 @@ Anthropic만 별도인 이유는 메시지 형식이 근본적으로 달라서�
   토큰 크기에서는 문제되지 않으며, 필요하면 앱이 bounded queue를 쓴다.
 - (−) `on_delta`로는 tool_call 조각을 볼 수 없다(텍스트만). 도구 호출 진행 상황까지
   보여줘야 하면 그때 확장한다 — 지금은 텍스트가 실사용의 전부다.
-- (−) Gemini는 OpenAI 호환 계층을 거치므로 네이티브 기능(thinking 등)을 못 쓴다.
-  필요해지면 그때 네이티브 `GeminiProvider`를 만든다.
+- (−) `google-genai`는 무겁다 — 설치에 25개 패키지(cryptography, google-auth 등)가 딸려온다.
+  optional extra라 코어의 `dependencies = []`는 그대로지만 쓰는 쪽은 알아야 한다.
+- (−) Gemini의 `max_retries`는 SDK가 **총 시도 횟수**를 받으므로 `+1` 변환이 들어간다.
+  세 Provider가 같은 인자 이름·같은 의미를 갖게 하기 위한 비용이다.
 - (−) 재시도를 SDK에 맡기므로 Provider별 동작이 미묘하게 다를 수 있고, **재시도가 strata에
   보이지 않는다** — 로그에도 usage에도 안 잡혀서 "이 run이 왜 40초 걸렸나"의 답이
   재시도 3회였어도 알 수 없다.

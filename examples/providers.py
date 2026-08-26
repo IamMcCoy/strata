@@ -8,9 +8,11 @@
 코드와 단위 테스트만 있고 호출해본 적이 없다 — 이 파일을 키와 함께 돌리는 것이 그 검증이다.
 특히 usage가 0으로 새지 않는지 보라(OpenAI 호환 계층이 stream_options를 안 받으면 샌다).
 
-핵심: **넷 중 셋은 같은 코드다.** OpenAI-compatible 엔드포인트라 base_url만 다르다.
-별도 구현이 필요한 건 Anthropic 하나뿐이다 — 메시지 형식이 근본적으로 다르기 때문이다
-(system이 최상위 파라미터, tool 호출/결과가 content block).
+vLLM/Ollama/OpenRouter는 OpenAI-compatible이라 `base_url`만 바꾼 **같은 코드**다.
+별도 구현이 필요한 건 Claude와 Gemini — 둘 다 메시지 형식이 근본적으로 다르다:
+
+  Claude  system이 최상위 파라미터, tool 호출/결과가 content block
+  Gemini  system이 config, assistant가 role='model', tool 호출/결과가 part
 """
 from __future__ import annotations
 
@@ -19,6 +21,7 @@ import os
 
 from strata import Agent
 from strata import AnthropicProvider
+from strata import GeminiProvider
 from strata import OpenAIProvider
 from strata import ReActStrategy
 from strata import Tool
@@ -62,12 +65,12 @@ def available():
                 base_url='https://openrouter.ai/api/v1', max_retries=3,
             ),
         ))
-    if os.environ.get('GEMINI_API_KEY'):
+    if os.environ.get('GEMINI_API_KEY') or os.environ.get('GOOGLE_API_KEY'):
+        # 네이티브 SDK. OpenAI 호환 엔드포인트도 여전히 되지만(base_url=...) 그쪽은 shim이라
+        # stream_options 지원 등이 버전에 따라 갈린다.
         providers.append((
-            'Gemini', OpenAIProvider(
-                model=os.environ.get('GEMINI_MODEL', 'gemini-2.0-flash'),
-                api_key=os.environ['GEMINI_API_KEY'],
-                base_url='https://generativelanguage.googleapis.com/v1beta/openai/', max_retries=3,
+            'Gemini', GeminiProvider(
+                model=os.environ.get('GEMINI_MODEL', 'gemini-2.0-flash'), max_retries=3,
             ),
         ))
     if os.environ.get('VLLM_BASE_URL'):
