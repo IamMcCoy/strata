@@ -87,8 +87,12 @@ class AnthropicProvider(Provider):
     프레임워크는 키를 저장·로깅하지 않고 SDK에 전달만 한다.
 
     max_tokens는 Anthropic이 **필수**로 요구한다 — 기본값을 두되 model_params로 덮을 수 있다.
-    client_kwargs는 AsyncAnthropic 생성자로 간다: `max_retries=5, timeout=30`
-    (SDK가 429·5xx를 지수 백오프로 재시도하므로 코어에 재시도 계층을 두지 않는다, ADR-0012).
+    max_retries: OpenAIProvider와 같은 이름·같은 기본값(2). SDK가 429·5xx를 지수 백오프로
+    재시도한다. 총 대기 시간은 대략 max_retries × timeout이다 (ADR-0012).
+
+    **미검증**: 이 Provider는 실제 Anthropic API로 호출해본 적이 없다. 메시지 변환은
+    단위 테스트(`tests/test_anthropic_provider.py`)로 고정돼 있지만 스트리밍 경로와
+    실제 tool 왕복은 확인되지 않았다.
     """
 
     def __init__(
@@ -96,6 +100,7 @@ class AnthropicProvider(Provider):
         model: str = 'claude-sonnet-5',
         api_key: str | None = None,
         max_tokens: int = 4096,
+        max_retries: int = 2,
         model_params: dict[str, Any] | None = None,
         **client_kwargs: Any,
     ):
@@ -108,7 +113,11 @@ class AnthropicProvider(Provider):
         self.model = model
         self.max_tokens = max_tokens
         self.model_params = dict(model_params or {})
-        self.client = AsyncAnthropic(api_key=api_key or os.environ.get('ANTHROPIC_API_KEY'), **client_kwargs)
+        self.client = AsyncAnthropic(
+            api_key=api_key or os.environ.get('ANTHROPIC_API_KEY'),
+            max_retries=max_retries,
+            **client_kwargs,
+        )
 
     async def generate(
         self,

@@ -129,9 +129,11 @@ class OpenAIProvider(Provider):
     api_key 우선순위: 명시적 인자 > OPENAI_API_KEY 환경변수.
     프레임워크는 키를 저장·로깅하지 않고 SDK에 전달만 한다.
     model_params: 기본 샘플링 파라미터(temperature, max_tokens 등) — 합치기는 Runtime.generate가 한다.
-    client_kwargs는 AsyncOpenAI 생성자로 간다 — 재시도·타임아웃도 여기다:
-    `OpenAIProvider(..., max_retries=5, timeout=30)`. SDK가 429·5xx·연결 오류를 지수 백오프로
-    재시도하므로 코어에 재시도 계층을 따로 두지 않는다 (ADR-0012).
+    max_retries: 429·5xx·연결 오류를 SDK가 지수 백오프로 재시도하는 횟수(기본 2 = 총 3회 시도).
+    코어에 재시도 계층을 겹치지 않는 이유는 백오프가 곱해지기 때문이다 (ADR-0012).
+    긴 재귀 실행에서 한 번의 rate limit으로 전체를 잃고 싶지 않으면 올린다.
+    **주의**: 총 대기 시간은 대략 max_retries × timeout이다 — 둘을 같이 정한다.
+    나머지 client_kwargs(timeout 등)는 AsyncOpenAI 생성자로 간다.
     """
 
     def __init__(
@@ -139,6 +141,7 @@ class OpenAIProvider(Provider):
         model: str,
         api_key: str | None = None,
         base_url: str | None = None,
+        max_retries: int = 2,
         model_params: dict[str, Any] | None = None,
         **client_kwargs: Any,
     ):
@@ -153,6 +156,7 @@ class OpenAIProvider(Provider):
         self.client = AsyncOpenAI(
             api_key=api_key or os.environ.get('OPENAI_API_KEY'),
             base_url=base_url,
+            max_retries=max_retries,
             **client_kwargs,
         )
 

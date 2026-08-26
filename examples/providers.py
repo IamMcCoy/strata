@@ -4,6 +4,10 @@
     export ANTHROPIC_API_KEY=sk-ant-...      # 또는 OPENAI_API_KEY / OPENROUTER_API_KEY / GEMINI_API_KEY
     uv run python examples/providers.py
 
+**검증 상태**: 실제 API로 확인된 건 OpenAI 경로뿐이다. Claude·Gemini·OpenRouter·vLLM은
+코드와 단위 테스트만 있고 호출해본 적이 없다 — 이 파일을 키와 함께 돌리는 것이 그 검증이다.
+특히 usage가 0으로 새지 않는지 보라(OpenAI 호환 계층이 stream_options를 안 받으면 샌다).
+
 핵심: **넷 중 셋은 같은 코드다.** OpenAI-compatible 엔드포인트라 base_url만 다르다.
 별도 구현이 필요한 건 Anthropic 하나뿐이다 — 메시지 형식이 근본적으로 다르기 때문이다
 (system이 최상위 파라미터, tool 호출/결과가 content block).
