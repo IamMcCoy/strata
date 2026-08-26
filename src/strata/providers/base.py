@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from abc import ABC
 from abc import abstractmethod
+from collections.abc import Callable
 from collections.abc import Mapping
 from dataclasses import dataclass
 from dataclasses import field
@@ -51,5 +52,13 @@ class Provider(ABC):
         self,
         messages: list[dict],
         tools: list[Tool] | None = None,
+        on_delta: Callable[[str], None] | None = None,
         **kwargs,
     ) -> ModelResponse: ...
+    """on_delta를 주면 텍스트 조각이 도착하는 대로 호출한다. **반환값은 그래도 완결된
+    ModelResponse다** — 스트리밍은 부수 채널이지 계약이 아니다 (ADR-0012).
+
+    덕분에 Strategy는 스트리밍을 몰라도 되고, 한도·usage 집계가 한 경로로 유지된다.
+    on_delta는 동기 콜백이다: await하면 실행이 소비자 속도에 묶인다. 앱은 큐에 밀어넣는다.
+    execution_id는 Runtime이 붙인다 — Provider는 실행 트리를 모른다.
+    """

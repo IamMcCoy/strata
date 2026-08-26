@@ -10,6 +10,7 @@ from strata.memory.base import MemoryItem
 from strata.memory.inmemory import InMemory
 from strata.memory.redis import RedisMemory
 from strata.memory.sqlite import SQLiteMemory
+from strata.providers.anthropic import AnthropicProvider
 from strata.providers.base import ModelResponse
 from strata.providers.base import Provider
 from strata.providers.base import ToolCall
@@ -42,6 +43,7 @@ logging.getLogger(__name__).addHandler(logging.NullHandler())
 __all__ = [
     'Agent',
     'AgentResult',
+    'AnthropicProvider',
     'BudgetExceeded',
     'Cancelled',
     'Context',

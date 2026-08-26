@@ -29,6 +29,7 @@ class Agent:
         memory=None,
         instructions: str | None = None,
         config: RuntimeConfig | None = None,
+        on_delta=None,
     ):
         self.provider = provider
         self.strategy = strategy
@@ -36,6 +37,9 @@ class Agent:
         self.memory = memory
         self.instructions = instructions
         self.config = config or RuntimeConfig()
+        # on_delta(text, execution_id) — 주면 Provider가 스트리밍으로 호출한다.
+        # 진입점은 여전히 run() 하나다(ADR-0006): 스트리밍은 부수 채널이지 두 번째 경로가 아니다.
+        self.on_delta = on_delta
         self.runtime: Runtime | None = None  # 마지막 run의 Runtime
 
     async def _recall(self, task: str) -> str | None:
@@ -64,6 +68,7 @@ class Agent:
         """
         runtime = self.runtime = Runtime(
             provider=self.provider, tools=self.tools, memory=self.memory, config=self.config,
+            on_delta=self.on_delta,
         )
         runtime.default_strategy = self.strategy  # spawn 시 strategy 미지정이면 상속 (ADR-0006)
         node = runtime.execution.open(task)

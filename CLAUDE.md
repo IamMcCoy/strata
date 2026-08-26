@@ -51,6 +51,9 @@ scripts/check_install.sh             # wheel 빌드 → 깨끗한 venv 설치 �
    `result.metadata['messages']`로 돌려준다. 대화를 `Memory`에 쌓지 않는다(retrieve에 순서가 없다).
    transcript는 `Agent.run`에만 붙인다 — child의 `AgentResult`에 실으면 불변식 4가 깨진다.
 6. I/O 경계(Provider, Tool, Memory, spawn)는 모두 `async def`.
+   스트리밍은 `on_delta` 콜백이다 — `generate`의 반환은 여전히 완결된 `ModelResponse`이고
+   Strategy는 스트리밍을 모른다(ADR-0012). `Agent.stream()` 같은 두 번째 진입점을 만들지 않는다.
+   재시도는 SDK에 맡긴다(`max_retries`) — 코어에서 또 하면 백오프가 곱해진다.
    관찰은 stdlib `logging` — 라이브러리는 `NullHandler`만 달고 설정하지 않는다.
    모든 줄에 `run=`/`exec=`를 붙이고 `%s` 지연 포매팅을 쓴다(레벨이 꺼지면 비용 0).
    토큰은 `Runtime.usage`(총합)와 `ExecutionNode.usage`(노드별) 두 층이다.

@@ -100,6 +100,15 @@ Execution Tree 완성 + Event 시스템 (Trace, Logging, Token Usage, Cost).
 - 완료 기준: [runtime.md](design/runtime.md#event-system)의 이벤트 전체가 발행되고,
   구독자 하나로 실행 전체의 토큰 사용량을 집계할 수 있다.
 
+## Phase 6.5 — 실전 내구성 ✅
+
+패턴을 늘리기 전에 기존 것이 실전에서 버티게 한다. 채택을 만드는 건 패턴 개수가 아니다.
+
+- 스트리밍: `on_delta` 콜백 — 반환 계약을 바꾸지 않아 Strategy가 그대로다 (ADR-0012)
+- Provider: `AnthropicProvider` 추가. Gemini/OpenRouter/vLLM은 `base_url`만 바꾼 같은 코드
+- 재시도: SDK의 `max_retries`에 맡긴다 — 코어에서 또 재시도하면 백오프가 곱해진다
+- 완료 기준: `tests/test_streaming.py`, `tests/test_anthropic_provider.py`, `examples/providers.py`
+
 ## Phase 7 — Reflection
 
 ```text
