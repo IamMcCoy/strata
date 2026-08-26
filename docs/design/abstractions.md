@@ -185,7 +185,7 @@ Strategy는 retrieve를 직접 부르지 않는다 — 이미 Context에 주입�
 ```python
 class Context:
 
-    messages        # 현재 대화/실행 메시지 (user/assistant/tool)
+    messages        # 현재 대화/실행 메시지 (user/assistant/tool) — 순수 JSON 데이터 (ADR-0010)
     instructions    # system 지시 — messages와 분리 (Strategy가 덧붙이고 child가 상속)
     variables       # 실행 중 상태 변수 = RLM의 Environment (거대 입력은 variables['context'])
     metadata        # task, execution_id 등
@@ -196,6 +196,43 @@ system 지시를 messages에 섞지 않는 이유는 [strategies.md](strategies.
 
 **Context는 현재 실행의 상태이며, 실행 종료 후 반드시 지속되어야 하는 것은 아니다.**
 지속이 필요한 정보는 Memory에 Store한다.
+
+### 멀티턴 — Conversation은 Context도 Memory도 아니다 (ADR-0010)
+
+수명이 다른 셋을 섞지 않는다.
+
+| | 무엇 | 수명 | 어디에 |
+|---|---|---|---|
+| **Context** | 한 `run` 안의 messages (tool 왕복 포함) | run 하나 | `Context.messages` |
+| **Conversation** | run **사이**의 대화 연속 = 멀티턴 | 세션 | **앱의 저장소** |
+| **Memory** | 실행 간 영속되는 *사실* | 영구 | `Memory` 구현체 |
+
+`Agent.run(task, history=[...])`로 이전 턴들을 넣고, `result.metadata['messages']`로
+이번 run의 전체 transcript를 돌려받는다. 코어는 대화를 저장하지 않는다.
+
+```python
+history = db.load(session_id)                      # 앱이 이미 갖고 있는 것
+result = await agent.run(task, history=history)
+db.save(session_id, result.metadata['messages'])   # 다음 턴에 그대로 다시 넘긴다
+```
+
+**대화를 Memory에 쌓지 말 것.** `retrieve`는 키워드 겹침 점수이고 순서 개념이 없다 —
+"3번째 턴에서 뭐라고 했는지"를 복원할 수 없고, 매 턴이 쌓이면 진짜 기억이
+"네 알겠습니다" 수백 개에 묻힌다. 둘은 층을 이룬다:
+
+```
+최근 N턴  →  history (원문 그대로, 순서 보존)
+    ↓ 컨텍스트 창이 차면 오래된 턴을 잘라냄 (잘라내기 정책은 앱의 몫)
+    ↓ 잘라내기 전에 모델이 remember 호출
+남길 사실  →  Memory (요약된 사실, 순서 무관, 영구)
+```
+
+`messages`에는 파이썬 객체를 넣지 않는다 — `tool_calls`도 dict다. 앱이 DB·큐에 저장하는
+대상이기 때문이다(`examples/worker.py`가 Redis 큐로 실어 나른다). 변환 책임은 Provider에 있다.
+
+transcript는 `Agent.run`에서만 붙는다 — `spawn_agent`가 만드는 child의 `AgentResult`에는
+실리지 않는다(재귀 context 폭발 방지). `Session` 객체를 코어에 두지 않는 이유는
+`Agent.run`을 무상태로 남겨 멀티 워커에서 그대로 동작하게 하기 위해서다.
 
 ### 문맥의 객체화 — Environment(Context)
 

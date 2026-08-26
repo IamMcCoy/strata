@@ -54,6 +54,14 @@ retrieve는 `Agent.run`이 자동으로(→ `Context.instructions`), store는 `M
   (`tests/test_memory.py`, `examples/memory.py`).
 - 세 구현이 같은 계약 테스트를 통과한다.
 
+## 멀티턴 — Phase 4의 곁가지 (ADR-0010)
+
+Memory와 자주 혼동되지만 다른 것이다: 대화 이력은 코어가 소유하지 않고
+`Agent.run(task, history=...)` ↔ `result.metadata['messages']`로 앱과 주고받는다.
+
+- 완료 기준: 턴 2가 턴 1의 대화를 보고, child의 `AgentResult`에는 transcript가 실리지 않는다
+  (`tests/test_conversation.py`, `examples/conversation.py`).
+
 ## Phase 5 — Runtime Control ✅ (Phase 3에서 흡수)
 
 `max_depth`, `max_iterations`, `max_children`, `token_budget`, `timeout` 전체 지원 —

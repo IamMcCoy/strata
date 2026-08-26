@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Mapping
+from dataclasses import asdict
 from types import MappingProxyType
 from typing import Any
 
@@ -91,7 +92,9 @@ class ReActStrategy(Strategy):
             context.messages.append({
                 'role': 'assistant',
                 'content': response.text,
-                'tool_calls': response.tool_calls,
+                # ToolCall 객체가 아니라 dict로 — Context.messages는 순수 JSON 데이터여야 한다.
+                # 앱이 이걸 저장했다 history로 되돌려 준다 (ADR-0010).
+                'tool_calls': [asdict(call) for call in response.tool_calls],
             })
             if not response.tool_calls:
                 return AgentResult(result=response.text)

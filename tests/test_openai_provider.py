@@ -25,7 +25,8 @@ def test_messages_round_trip():
         {
             'role': 'assistant',
             'content': None,
-            'tool_calls': [ToolCall(name='add', arguments={'a': 1, 'b': 2}, id='call_x')],
+            # messages에는 ToolCall 객체가 아니라 dict가 담긴다 — 순수 JSON 계약 (ADR-0010)
+            'tool_calls': [{'name': 'add', 'arguments': {'a': 1, 'b': 2}, 'id': 'call_x'}],
         },
         {'role': 'tool', 'name': 'add', 'tool_call_id': 'call_x', 'content': '3'},
     ]
