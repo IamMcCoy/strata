@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import os
 from collections.abc import Callable
 from typing import Any
@@ -29,13 +30,19 @@ def _to_gemini_contents(messages: list[dict]) -> tuple[str | None, list[dict]]:
             if message.get('content'):
                 parts.append({'text': message['content']})
             for index, call in enumerate(message.get('tool_calls') or []):
-                parts.append({
+                part: dict[str, Any] = {
                     'function_call': {
                         'id': call.get('id') or f'call_{index}',   # id 없는 fake 응답도 왕복되게
                         'name': call['name'],
                         'args': call['arguments'],
                     },
-                })
+                }
+                # Gemini 3.x는 이 서명을 돌려받지 못하면 400으로 거절한다.
+                # provider_state에는 base64 문자열로 담겨 있다(messages는 순수 JSON) — bytes로 되돌린다.
+                signature = (call.get('provider_state') or {}).get('thought_signature')
+                if signature:
+                    part['thought_signature'] = base64.b64decode(signature)
+                parts.append(part)
             if parts:
                 contents.append({'role': 'model', 'parts': parts})
         elif role == 'tool':
@@ -108,7 +115,16 @@ def _collect(parts: list, texts: list[str], calls: list[ToolCall]) -> None:
         if call is not None:
             # ponytail: function_call은 청크 하나에 온전히 온다고 본다. partial_args가 실제로
             # 쪼개져 오면 그때 index별 누적을 단다(OpenAI 쪽 _consume_stream처럼).
-            calls.append(ToolCall(name=call.name, arguments=dict(call.args or {}), id=call.id))
+            state: dict = {}
+            signature = getattr(part, 'thought_signature', None)
+            if signature:
+                # bytes는 JSON에 못 담는다 — base64로 옮겨 messages를 순수 JSON으로 유지한다
+                state['thought_signature'] = base64.b64encode(signature).decode()
+            calls.append(
+                ToolCall(
+                    name=call.name, arguments=dict(call.args or {}), id=call.id, provider_state=state,
+                ),
+            )
 
 
 class GeminiProvider(Provider):
@@ -127,8 +143,11 @@ class GeminiProvider(Provider):
     **총 시도 횟수**(attempts)를 받으므로 +1로 변환한다 — 안 그러면 같은 값이 벤더마다
     다르게 동작한다.
 
-    **미검증**: 실제 Gemini API로 호출해본 적이 없다. 메시지 변환은 단위 테스트로
-    고정돼 있지만 스트리밍 경로와 tool 왕복은 확인되지 않았다.
+    검증됨: gemini-3.5-flash-lite로 스트리밍·tool 왕복·usage 집계까지 실제 호출로 확인했다.
+
+    Gemini 3.x는 function_call part의 `thought_signature`를 다음 턴에 돌려받아야 한다 —
+    없으면 400으로 거절한다. bytes라 messages(순수 JSON)에 직접 못 담으므로
+    `ToolCall.provider_state`에 base64로 실어 왕복시킨다.
     """
 
     def __init__(

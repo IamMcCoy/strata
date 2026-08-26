@@ -102,14 +102,23 @@ Agent(provider=..., strategy=..., on_delta=lambda text, execution_id: queue.put_
 | Claude | `AnthropicProvider(model=...)` — 메시지 형식이 달라 별도 구현 | ❌ **미검증** (변환 단위 테스트만) |
 | vLLM / Ollama | `OpenAIProvider(base_url='http://localhost:8000/v1')` | ❌ **미검증** |
 | OpenRouter | `OpenAIProvider(base_url='https://openrouter.ai/api/v1')` | ❌ **미검증** |
-| Gemini | `GeminiProvider(model=...)` — 네이티브 SDK, 별도 구현 | ❌ **미검증** |
+| Gemini | `GeminiProvider(model=...)` — 네이티브 SDK, 별도 구현 | ✅ 스트리밍·tool 왕복·usage 확인 |
 | Gemini (호환 경로) | `OpenAIProvider(base_url='https://generativelanguage.googleapis.com/v1beta/openai/')` | ❌ **미검증** |
 
 **미검증이 뜻하는 것**: 코드는 있고 단위 테스트도 있지만 실제 API로 한 번도 호출하지
 않았다. 특히 확인이 필요한 지점은 **OpenAI 호환 계층이 `stream_options: {include_usage: true}`를
 받는가**다 — 안 받으면 usage가 0으로 새고 `token_budget`이 무의미해진다.
-(실제 호출로만 드러나는 문제의 선례: 스트림 미close로 인한 커넥션 누수, redis.asyncio의
-이벤트 루프 바인딩. 둘 다 fake로는 통과했다.)
+
+실제 호출로만 드러난 문제가 이 프로젝트에서 이미 셋이다: 스트림 미close로 인한 커넥션 누수,
+redis.asyncio의 이벤트 루프 바인딩, 그리고 **Gemini 3.x의 `thought_signature` 왕복 요구**
+(없으면 tool이 아예 동작하지 않는데 fake 테스트는 전부 통과했다).
+
+### 벤더 전용 상태 — `ToolCall.provider_state`
+
+코어가 해석하지 않고 그대로 왕복시키는 불투명 주머니다. 벤더 필드를 `ToolCall` 본문에
+넣으면 계약이 오염되고, 버리면 해당 벤더에서 tool이 깨진다.
+`messages`에 실려 앱의 저장소를 왕복하므로 **JSON 직렬화 가능한 값만** 넣는다(ADR-0010) —
+Gemini의 `thought_signature`는 bytes라 base64로 옮긴다.
 
 **Gemini에 네이티브 구현을 둔 이유**: OpenAI 호환 계층은 shim이라 네이티브 기능(thinking 등)을
 못 쓰고 `stream_options` 지원이 버전에 따라 갈린다. 다만 `client.interactions`(next-gen API)는

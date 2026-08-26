@@ -98,9 +98,9 @@ def fake_response(parts, usage=None):
     )
 
 
-def part(text=None, call=None):
+def part(text=None, call=None, signature=None):
     function_call = SimpleNamespace(name=call[0], args=call[1], id=call[2]) if call else None
-    return SimpleNamespace(text=text, function_call=function_call)
+    return SimpleNamespace(text=text, function_call=function_call, thought_signature=signature)
 
 
 def test_collect_splits_text_and_tool_calls():
@@ -127,6 +127,36 @@ def test_empty_candidates_do_not_crash():
     """안전 필터 등으로 candidates가 비어 올 수 있다 — 그때 run이 죽으면 안 된다."""
     assert _parts_of(SimpleNamespace(candidates=[])) == []
     assert _parts_of(SimpleNamespace(candidates=None)) == []
+
+
+def test_thought_signature_round_trips_through_provider_state():
+    """Gemini 3.x는 function_call part의 thought_signature를 돌려받지 못하면 400으로 거절한다.
+
+    실제 API로만 드러난 계약이다. bytes라 messages(순수 JSON, ADR-0010)에 직접 못 담아
+    base64로 옮겼다가 요청 조립 시점에 되돌린다.
+    """
+    import base64
+    import json
+    from dataclasses import asdict
+
+    raw = b'\x12^\n\\\x01\x11M2'  # 실제 응답에서 오는 형태(바이너리)
+    texts, calls = [], []
+    _collect([part(call=('add', {'a': 1}, 'c1'), signature=raw)], texts, calls)
+
+    assert calls[0].provider_state['thought_signature'] == base64.b64encode(raw).decode()
+    dumped = json.dumps([asdict(c) for c in calls])  # 앱의 저장소를 왕복하는 지점
+    restored = json.loads(dumped)
+
+    _, contents = _to_gemini_contents([{'role': 'assistant', 'content': None, 'tool_calls': restored}])
+    assert contents[0]['parts'][0]['thought_signature'] == raw, '서명이 원본 bytes로 복원돼야 한다'
+
+
+def test_tool_calls_without_a_signature_still_work():
+    """다른 Provider나 fake가 만든 tool_call에는 provider_state가 없다 — 그래도 깨지지 않는다."""
+    _, contents = _to_gemini_contents([
+        {'role': 'assistant', 'content': None, 'tool_calls': [{'name': 'add', 'arguments': {}, 'id': 'c1'}]},
+    ])
+    assert 'thought_signature' not in contents[0]['parts'][0]
 
 
 def test_max_retries_is_translated_to_attempts():

@@ -70,7 +70,7 @@ def available():
         # stream_options 지원 등이 버전에 따라 갈린다.
         providers.append((
             'Gemini', GeminiProvider(
-                model=os.environ.get('GEMINI_MODEL', 'gemini-2.0-flash'), max_retries=3,
+                model=os.environ.get('GEMINI_MODEL', 'gemini-3.5-flash-lite'), max_retries=3,
             ),
         ))
     if os.environ.get('VLLM_BASE_URL'):
@@ -101,9 +101,18 @@ async def main():
         agent = Agent(
             provider=provider, strategy=ReActStrategy(), tools=[AddTool()], on_delta=show,
         )
-        result = await agent.run('add tool로 123456 + 654321을 계산하고 한 문장으로 답해줘.')
-        print(f"\n  → status={result.status} tokens={agent.runtime.usage['total_tokens']}")
+        try:
+            result = await agent.run('add tool로 123456 + 654321을 계산하고 한 문장으로 답해줘.')
+        except Exception as exc:
+            # 검증용 예제이므로 한 Provider가 죽어도 나머지를 계속 본다.
+            # (코어는 이 예외를 삼키지 않는다 — root 예외는 앱이 봐야 한다, ADR-0012)
+            print(f'\n  ✗ 실패: {type(exc).__name__}: {exc}')
+            continue
+        tokens = agent.runtime.usage['total_tokens']
+        print(f'\n  → status={result.status} tokens={tokens}')
         print(f"  → run_id={result.metadata['run_id']}")
+        if tokens == 0:
+            print('  ⚠ usage가 0이다 — 이 경로는 token_budget이 무력화된다')
 
 
 if __name__ == '__main__':

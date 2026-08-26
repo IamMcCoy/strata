@@ -90,7 +90,10 @@ Anthropic이 별도인 이유는 메시지 형식이 근본적으로 달라서�
   호출의 rate limit으로 통째로 날아가는 시나리오는 그대로다 — 협조적 취소처럼 부분 결과를
   살리는 경로가 없다. 필요해지면 Provider 오류를 `status='failed'` 계약으로 변환한다
   (같은 배관, ~10줄).
-- (−) **`AnthropicProvider`와 Gemini/OpenRouter/vLLM 경로는 실제 API로 검증되지 않았다.**
+- (−) 벤더 전용 왕복 상태를 위해 `ToolCall.provider_state`(불투명 dict)를 추가했다.
+  Gemini 3.x가 `thought_signature`를 돌려받지 못하면 tool이 아예 동작하지 않아 불가피했다.
+  코어는 내용을 해석하지 않지만, 계약에 구멍이 하나 생긴 것은 사실이다.
+- (−) **`AnthropicProvider`와 OpenRouter/vLLM 경로는 실제 API로 검증되지 않았다.**
   메시지 변환은 단위 테스트로 고정했지만 스트리밍 경로와 tool 왕복은 미확인이다.
   특히 OpenAI 호환 계층이 `stream_options: {include_usage: true}`를 받지 않으면 usage가
   0으로 새어 `token_budget`이 무력화된다. 키가 확보되면 `examples/providers.py`로 확인한다.
