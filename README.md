@@ -7,29 +7,109 @@
 Provider, Tool, Memory, Context, Strategy, Execution을 독립적인 primitive로 추상화하고,
 Runtime이 이들을 연결·실행·관찰한다.
 
+**런타임 의존성 0개.** Provider SDK는 선택적으로 설치한다 — 그래서 앱이 고정한
+`openai`/`anthropic` 버전과 절대 충돌하지 않는다.
+
 ```python
 from strata import Agent, OpenAIProvider, RLMStrategy, RuntimeConfig
 
 agent = Agent(
-    provider=OpenAIProvider(model='gpt-4o-mini', model_params={'temperature': 0.3}),  # 배포 기본 파라미터
-    strategy=RLMStrategy(),             # ReActStrategy / RecursiveStrategy 로 교체 가능.
-                                        # prompt=(패턴 지시) / model_params=(이 전략의 파라미터) 로 덮어쓰기
-    instructions='한국어로 간결하게 답하라.',   # 사용자 system 지시 — 전략의 harness prompt 앞에 붙고 child가 상속
+    provider=OpenAIProvider(model='gpt-4o-mini', model_params={'temperature': 0.3}),
+    strategy=RLMStrategy(),             # ReActStrategy / RecursiveStrategy 로 교체 가능
+    instructions='한국어로 간결하게 답하라.',   # system 지시 — child가 상속한다
     config=RuntimeConfig(max_depth=3, token_budget=200_000),
 )
 
 # 거대 입력은 메시지가 아니라 변수 `context`로 들어간다 — 모델은 python tool로 조각내고
 # llm_query로 child agent에 조각만 넘겨 결과를 모은다 (RLM).
 result = await agent.run('이 문서의 모든 장의 핵심 숫자를 합산하라.', context=huge_document)
-print(result.status, result.result)        # completed | failed | budget_exceeded
+print(result.status, result.result)   # completed | failed | budget_exceeded | cancelled
 ```
 
-같은 Agent에서 `strategy=` 만 교체하면 실행 패턴이 바뀐다. 각 Strategy는 자기 패턴의 harness
-prompt(tool 규율·종료 규약·위임/REPL 규칙)를 기본으로 갖고 system = `instructions` + `prompt` +
-현재 상태로 조립한다. 한도(depth/children/iterations/token/timeout)는 Strategy가 아니라 Runtime이
-강제하고, 초과 시 예외 대신 `budget_exceeded` 결과(지금까지의 답 포함)를 돌려준다. 모델 파라미터는
-Provider 기본값 위에 Strategy 값이 얹힌다(합치는 곳은 `Runtime.generate` 한 줄). Tool은
-`execute(self, env, **kwargs)` 하나만 구현한다.
+같은 Agent에서 `strategy=`만 교체하면 실행 패턴이 바뀐다. 한도(depth/children/iterations/
+token/timeout)는 Strategy가 아니라 **Runtime이** 강제하므로 Custom Strategy가 한도를 몰라도
+지켜지고, 초과 시 예외 대신 `budget_exceeded` 결과(지금까지의 답 포함)를 돌려준다.
+
+## 구성요소
+
+### Provider
+
+| | 쓰는 법 | 실제 API 검증 |
+|---|---|---|
+| OpenAI | `OpenAIProvider(model='gpt-4o-mini')` | ✅ 스트리밍·tool·usage |
+| Gemini | `GeminiProvider(model='gemini-3.5-flash-lite')` | ✅ 스트리밍·tool·usage |
+| vLLM | `OpenAIProvider(base_url='http://host:port/v1')` | ✅ 스트리밍·usage <sup>1</sup> |
+| Claude | `AnthropicProvider(model='claude-sonnet-5')` | ❌ 미검증 |
+| OpenRouter | `OpenAIProvider(base_url='https://openrouter.ai/api/v1')` | ❌ 미검증 |
+| Ollama | `OpenAIProvider(base_url='http://localhost:11434/v1')` | ❌ 미검증 |
+
+<sup>1</sup> vLLM에서 tool을 쓰려면 서버가 `--enable-auto-tool-choice`로 떠 있어야 한다.
+
+OpenAI-compatible 엔드포인트는 `base_url`만 바꾼 **같은 코드**다. 별도 구현이 필요한 건
+Claude와 Gemini뿐 — 둘 다 메시지 형식이 근본적으로 다르다.
+재시도는 SDK에 맡긴다: `Provider(..., max_retries=2, timeout=30)`.
+
+### Memory — 실행 간 영속 (Context와 분리, [ADR-0002](docs/adr/0002-context-memory-separation.md))
+
+| | 언제 | 비용 |
+|---|---|---|
+| `InMemory()` | 개발·테스트·단일 프로세스 | 없음 |
+| `SQLiteMemory('mem.db')` | 영속 + 멀티 워커(같은 호스트) | stdlib `sqlite3` |
+| `RedisMemory(client)` | 워커가 여러 호스트에 흩어질 때 | 클라이언트를 **주입**받는다 |
+
+`retrieve`는 `Agent.run`이 자동으로(→ system 지시), `store`는 모델이 `MemoryTool`로 명시적으로.
+스코프는 인스턴스가 가른다: `SQLiteMemory(path, namespace=f'user:{uid}')`.
+
+### Strategy
+
+`ReActStrategy` / `RecursiveStrategy` / `RLMStrategy`.
+각 Strategy는 자기 패턴의 harness prompt(tool 규율·종료 규약·위임 규칙)를 갖고
+system = `instructions` + `prompt` + 현재 상태로 조립한다. Tool은 `execute(self, env, **kwargs)`
+하나만 구현한다.
+
+## 주요 기능
+
+### 스트리밍 — 콜백이지 두 번째 진입점이 아니다 ([ADR-0012](docs/adr/0012-streaming-as-a-side-channel.md))
+
+```python
+agent = Agent(..., on_delta=lambda text, execution_id: queue.put_nowait(text))
+```
+`generate`의 반환은 스트리밍 여부와 무관하게 **완결된 `ModelResponse`**다. 그래서 Strategy는
+스트리밍을 모르고, 한도·usage 집계가 한 경로로 유지된다. 재귀에서는 `execution_id`로
+어느 child가 말하는지 갈린다.
+
+### 멀티턴 — 대화 이력은 코어가 소유하지 않는다 ([ADR-0010](docs/adr/0010-conversation-history-is-not-core-state.md))
+
+```python
+history = db.load(session_id)
+result = await agent.run(task, history=history)
+db.save(session_id, result.metadata['messages'])
+```
+`Agent.run`이 무상태로 남아 멀티 워커에서 그대로 동작한다.
+`Context`(한 run) ≠ `Conversation`(run 사이) ≠ `Memory`(영속되는 사실) — 셋은 다른 것이다.
+
+### 취소 — 두 종류 ([ADR-0011](docs/adr/0011-run-id-and-two-kinds-of-cancellation.md))
+
+| | 방법 | 부분 결과 |
+|---|---|---|
+| 하드 | `asyncio.Task.cancel()` | 없음 |
+| 협조적 | `runtime.cancel(reason)` | **지금까지의 답을 살린다** |
+
+협조적 취소는 Provider 호출 **앞**에서 멈추므로 취소 후 LLM 비용이 0이다.
+
+### 관찰 — stdlib `logging`
+
+```python
+logging.basicConfig(level=logging.DEBUG)      # 라이브러리는 NullHandler만 단다
+```
+```text
+run=01a03c7b-… exec=exec_0 agent.started task=루트 작업
+run=01a03c7b-… exec=exec_2 agent.spawned parent=exec_0 depth=1 task=비싼 조각
+run=01a03c7b-… exec=exec_0 agent.finished status=completed tokens=115
+```
+`run_id`(UUIDv7, 코어가 발급)로 프로세스를 넘어 줄을 묶는다. 토큰은 두 층이다 —
+`Runtime.usage`(run 총합)와 `ExecutionNode.usage`/`subtree_usage()`(노드별, 재귀에서
+어느 가지가 비쌌는지).
 
 ## 설치
 
@@ -37,39 +117,55 @@ Provider 기본값 위에 Strategy 값이 얹힌다(합치는 곳은 `Runtime.ge
 
 ```bash
 uv add git+https://github.com/IamMcCoy/strata.git
-# 또는: pip install git+https://github.com/IamMcCoy/strata.git
 ```
 
-설치 후 `import strata` 로 사용한다. 타입 힌트가 포함되어 있다(PEP 561, `py.typed`).
-
-Provider SDK는 optional extra로 설치한다 (코어는 의존성 0):
+코어는 의존성 0개다. 쓰는 SDK만 extra로 고른다:
 
 ```bash
 uv add 'strata[openai] @ git+https://github.com/IamMcCoy/strata.git'
+# anthropic / gemini / redis / all
+```
+
+타입 힌트가 포함되어 있다(PEP 561, `py.typed`).
+
+## 예제
+
+```bash
+uv run python examples/react.py           # fake provider — 키 없이 동작
+uv run python examples/recursive.py       # 재귀 + Execution Tree
+uv run python examples/rlm.py             # 거대 입력을 변수로 다루기
+uv run python examples/memory.py          # 실행 간 기억
+uv run python examples/conversation.py    # 멀티턴 + Memory 층
+uv run python examples/observability.py   # 로그 + 노드별 토큰
+
+uv run python examples/providers.py       # 실제 API — 키가 있는 Provider만 호출
+make redis-up && uv run python examples/worker.py   # Redis 큐 + 워커 2프로세스
 ```
 
 ## 문서
 
 - [문서 인덱스](docs/README.md) — 읽는 순서 안내
-- [프로젝트 개요](docs/overview/project-overview.md)
-- [아키텍처](docs/architecture/architecture.md)
-- [ADR](docs/adr/README.md)
-- [로드맵](docs/roadmap.md)
-- [기여 가이드](docs/CONTRIBUTING.md) — Git Flow, 코드 스타일
+- [아키텍처](docs/architecture/architecture.md) · [설계](docs/design/abstractions.md)
+- [ADR](docs/adr/README.md) — 되돌리기 비싼 결정과 그 근거 12건
+- [로드맵](docs/roadmap.md) · [기여 가이드](docs/CONTRIBUTING.md)
 
 ## 상태
 
-Phase 1~3·5 완료 — ReAct / Recursive / RLM Strategy, OpenAI Provider, Runtime 한도 전체.
-다음은 Memory(Phase 4)와 Events(Phase 6). 구현 순서는 [로드맵](docs/roadmap.md) 참조.
-예제: `examples/react.py`, `examples/recursive.py`, `examples/rlm.py`(fake provider),
-`examples/react_openai.py`, `examples/rlm_openai.py`(실제 API).
+Phase 1~6.5 완료 — ReAct/Recursive/RLM Strategy, Runtime 한도 전체, Memory 3종,
+멀티턴, 취소, 스트리밍, Provider 4종, 로깅·노드별 토큰.
+다음은 Phase 7(Reflection). 상세는 [로드맵](docs/roadmap.md).
 
 ## 개발 환경
 
-Python 3.12 + [uv](https://docs.astral.sh/uv/). 브랜치 전략과 코드 스타일은
-[기여 가이드](docs/CONTRIBUTING.md) 참조.
+Python 3.12 + [uv](https://docs.astral.sh/uv/).
 
 ```bash
-uv sync            # .venv 생성 + 의존성 설치
-uv run pytest      # 테스트
+make install            # uv sync
+make test               # 단위 테스트 — 외부 의존 없음
+make lint               # pre-commit 전체
+make check              # lint + test (커밋 전)
+make test-integration   # 실제 Redis + 멀티프로세스 (docker 필요)
+make help               # 전체 명령
 ```
+
+브랜치 전략과 코드 스타일은 [기여 가이드](docs/CONTRIBUTING.md) 참조.
