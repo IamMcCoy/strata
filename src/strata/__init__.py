@@ -14,6 +14,7 @@ from strata.providers.anthropic import AnthropicProvider
 from strata.providers.base import ModelResponse
 from strata.providers.base import Provider
 from strata.providers.base import ToolCall
+from strata.providers.gemini import GeminiProvider
 from strata.providers.openai import OpenAIProvider
 from strata.runtime.config import RuntimeConfig
 from strata.runtime.execution import ExecutionManager
@@ -49,6 +50,7 @@ __all__ = [
     'Context',
     'ExecutionManager',
     'ExecutionNode',
+    'GeminiProvider',
     'InMemory',
     'Memory',
     'MemoryItem',
