@@ -123,8 +123,46 @@ class Memory(ABC):
     async def delete(self, memory_id: str): ...
 ```
 
-구현체: `InMemory`(Phase 4 최초 구현), `RedisMemory`, `VectorMemory`,
-`SQLMemory`, `FileMemory`, `CustomMemory`.
+### 구현체 — 코어가 소유하는 셋
+
+관련성 판단(`rank()`)은 `memory/base.py` 한 곳에 있고 세 구현이 공유한다 — 저장소가 달라도
+"무엇이 관련 있는가"는 하나여야 하기 때문이다. 부분 문자열 겹침으로 세는 이유는 한국어가
+교착어라 단어 단위 비교('uv를' != 'uv')가 거의 다 빗나가서다.
+
+| 구현 | 언제 | 비용 |
+|---|---|---|
+| `InMemory` | 개발·테스트·단일 프로세스 | 없음 |
+| `SQLiteMemory` | 영속 + 멀티 워커(같은 호스트) | stdlib `sqlite3` — 의존성 0개 유지 |
+| `RedisMemory` | 워커가 여러 호스트에 흩어질 때 | 클라이언트를 **주입**받는다 — strata는 `redis`를 import하지 않는다 |
+
+`RedisMemory(client, namespace=...)`가 주소가 아니라 **클라이언트**를 받는 이유:
+`dependencies = []`를 지키고, 연결 풀·재연결·타임아웃 정책을 코어가 아니라 애플리케이션에 남긴다.
+`hset`/`hgetall`/`hdel`을 await할 수 있으면 어떤 클라이언트든 된다.
+주소만 있을 때는 `RedisMemory.from_url('redis://...')` — `redis`를 메서드 안에서 지연 import하므로
+의존성 0개는 그대로다(`test_importing_strata_does_not_import_redis`가 지킨다).
+
+스코프를 나눌 때 `from_url`을 반복 호출하면 사용자 수만큼 커넥션 풀이 생긴다.
+**클라이언트는 공유하고 인스턴스만 나눈다** — 그게 주입 설계가 주는 것이다.
+redis.asyncio 클라이언트는 자기를 만든 이벤트 루프에 묶이므로 프로세스/루프당 하나를 재사용한다.
+
+**스코프는 인스턴스가 가른다** — `retrieve`에 필터 인자를 두지 않는다.
+사용자·세션별 격리는 `SQLiteMemory(path, namespace=f'user:{uid}')`처럼 인스턴스를 나눠서 한다.
+메서드 인자로 두면 모든 구현이 필터링을 구현해야 하고 호출자가 매번 넘겨야 한다.
+
+MariaDB·PostgreSQL·Vector DB는 코어가 소유하지 않는다. SQL 방언은 플레이스홀더(`?`/`%s`/`$1`)부터
+전문검색(`FTS5`/`MATCH…AGAINST`/`tsvector`)까지 달라 "공통 SQLMemory"는 전체 스캔으로만 수렴하고,
+묶으려면 SQLAlchemy가 필요해 의존성 0개가 깨진다. `Memory` ABC가 이미 그 추상화이므로
+각 DB는 40줄짜리 `Memory` 구현을 직접 쓰면 된다 — 그 아래 두 번째 추상화 계층을 두지 않는다.
+
+### Lifecycle — 흐름은 단방향 (ADR-0002)
+
+| 방향 | 누가 | 어디서 |
+|---|---|---|
+| retrieve | 자동 | `Agent.run`이 task로 조회해 사용자 지시 뒤에 붙인다 (`Context.instructions` → system, child도 상속) |
+| store | 명시적 | 모델이 `MemoryTool`(`remember`)을 호출한다. 트리거는 Tool, 메커니즘은 `env.runtime.memory` (ADR-0007) |
+
+Strategy는 retrieve를 직접 부르지 않는다 — 이미 Context에 주입된 상태로 받는다.
+자동 store는 두지 않는다: 무엇을 남길지는 코어가 아니라 모델의 판단이다.
 
 ### Memory Type
 

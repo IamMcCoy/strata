@@ -5,6 +5,9 @@ from strata.agent.agent import Agent
 from strata.agent.context import Context
 from strata.memory.base import Memory
 from strata.memory.base import MemoryItem
+from strata.memory.inmemory import InMemory
+from strata.memory.redis import RedisMemory
+from strata.memory.sqlite import SQLiteMemory
 from strata.providers.base import ModelResponse
 from strata.providers.base import Provider
 from strata.providers.base import ToolCall
@@ -24,6 +27,7 @@ from strata.strategies.rlm import RLM_PROMPT
 from strata.strategies.rlm import RLMStrategy
 from strata.tools.base import Tool
 from strata.tools.base import ToolEnv
+from strata.tools.memory import MemoryTool
 from strata.tools.python import PythonTool
 from strata.tools.spawn import SpawnAgentTool
 
@@ -34,8 +38,10 @@ __all__ = [
     'Context',
     'ExecutionManager',
     'ExecutionNode',
+    'InMemory',
     'Memory',
     'MemoryItem',
+    'MemoryTool',
     'ModelResponse',
     'OpenAIProvider',
     'Provider',
@@ -46,8 +52,10 @@ __all__ = [
     'RLM_PROMPT',
     'ReActStrategy',
     'RecursiveStrategy',
+    'RedisMemory',
     'Runtime',
     'RuntimeConfig',
+    'SQLiteMemory',
     'SpawnAgentTool',
     'Strategy',
     'Tool',
