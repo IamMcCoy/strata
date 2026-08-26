@@ -4,9 +4,12 @@
     export ANTHROPIC_API_KEY=sk-ant-...      # 또는 OPENAI_API_KEY / OPENROUTER_API_KEY / GEMINI_API_KEY
     uv run python examples/providers.py
 
-**검증 상태**: 실제 API로 확인된 건 OpenAI 경로뿐이다. Claude·Gemini·OpenRouter·vLLM은
-코드와 단위 테스트만 있고 호출해본 적이 없다 — 이 파일을 키와 함께 돌리는 것이 그 검증이다.
-특히 usage가 0으로 새지 않는지 보라(OpenAI 호환 계층이 stream_options를 안 받으면 샌다).
+**검증 상태**: OpenAI·Gemini는 스트리밍·tool 왕복·usage까지, vLLM은 스트리밍·usage까지
+실제 호출로 확인했다. Claude·OpenRouter·Ollama는 미검증 — 이 파일을 키와 함께 돌리는 것이
+그 검증이다. usage가 0으로 새지 않는지 보라(호환 계층이 stream_options를 안 받으면 샌다).
+
+vLLM에서 tool을 쓰려면 서버가 `--enable-auto-tool-choice --tool-call-parser ...`로 떠 있어야
+한다. 없으면 tool을 넘기는 순간 400이다 — 코드가 아니라 서버 기동 옵션이다.
 
 vLLM/Ollama/OpenRouter는 OpenAI-compatible이라 `base_url`만 바꾼 **같은 코드**다.
 별도 구현이 필요한 건 Claude와 Gemini — 둘 다 메시지 형식이 근본적으로 다르다:

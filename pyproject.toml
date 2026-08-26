@@ -9,8 +9,17 @@ dependencies = []
 [project.urls]
 Repository = "https://github.com/IamMcCoy/strata"
 
+# 코어는 의존성 0개다. Provider/Memory 구현이 쓰는 SDK는 extra로 고른다.
+# 여기 이름은 코드의 ImportError 안내문과 정확히 일치해야 한다 —
+# 존재하지 않는 extra는 조용히 무시돼서 "설치했는데 또 같은 에러"가 반복된다.
+# tests/test_packaging.py가 둘의 일치를 강제한다.
 [project.optional-dependencies]
 openai = ["openai>=1.50"]
+anthropic = ["anthropic>=0.40"]
+gemini = ["google-genai>=2.0"]
+redis = ["redis>=5"]
+# 다 필요한 사람을 위한 지름길. 기본값은 여전히 의존성 0개다.
+all = ["strata[openai,anthropic,gemini,redis]"]
 
 [dependency-groups]
 # redis는 dev 전용 — RedisMemory는 클라이언트를 주입받으므로 런타임 의존성이 아니다
