@@ -78,6 +78,28 @@ ReActStrategy(model_params={'temperature': 0})             # 패턴별 값 — �
   코어는 의존성 0을 유지하고, SDK import는 Provider 생성 시점에 일어나므로
   extras 없이도 `import strata`는 동작한다.
 
+### 오류 — 인프라와 프로그래밍을 가른다 (ADR-0013)
+
+Provider가 자사 SDK 예외를 `ProviderError`로 번역한다. 벤더 번역이 Provider 책임인 것은
+usage 표준 키·메시지 형식과 같은 이유이며, 덕분에 **코어는 `openai`가 무엇인지 모른다.**
+
+| | 예 | 결말 |
+|---|---|---|
+| 인프라 오류 | 429·5xx·타임아웃·인증 (재시도 소진 후) | `status='failed'` + **지금까지의 답** |
+| 프로그래밍 오류 | `TypeError`, 오타 | 그대로 전파 — 사용자가 봐야 한다 |
+
+예산 소진과 같은 상황(더 못 가지만 결과는 있다)이므로 같은 결말을 준다.
+변환은 `run_strategy`의 `BudgetExceeded`/`Cancelled` 옆 한 줄이다.
+
+폴백이 필요하면 코어가 아니라 Provider로:
+
+```python
+Agent(provider=FallbackProvider([openai, claude]), ...)
+```
+
+`ProviderError`만 잡고, **첫 델타가 나간 뒤에는 폴백하지 않는다** — 이미 흘러간 텍스트가
+있으면 중복 출력되기 때문이다.
+
 ### 스트리밍 — 부수 채널 (ADR-0012)
 
 ```python

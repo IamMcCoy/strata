@@ -97,6 +97,16 @@ db.save(session_id, result.metadata['messages'])
 
 협조적 취소는 Provider 호출 **앞**에서 멈추므로 취소 후 LLM 비용이 0이다.
 
+### 오류 — 인프라와 프로그래밍을 가른다 ([ADR-0013](docs/adr/0013-provider-errors-become-a-result-contract.md))
+
+| | 결말 |
+|---|---|
+| 429·5xx·타임아웃 (재시도 소진 후) | `status='failed'` + **지금까지의 답을 살린다** |
+| `TypeError` 등 내 코드 버그 | 그대로 터진다 — 삼키지 않는다 |
+
+30분짜리 재귀가 마지막 호출의 rate limit으로 통째로 날아가지 않는다.
+폴백이 필요하면 `Agent(provider=FallbackProvider([openai, claude]), ...)`.
+
 ### 관찰 — stdlib `logging`
 
 ```python

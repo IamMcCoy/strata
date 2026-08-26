@@ -7,6 +7,7 @@ from typing import Any
 
 from strata.agent.context import Context
 from strata.providers.base import ModelResponse
+from strata.providers.base import ProviderError
 from strata.runtime.config import RuntimeConfig
 from strata.runtime.execution import ExecutionManager
 from strata.runtime.execution import USAGE_KEYS
@@ -187,8 +188,8 @@ class Runtime:
         )
         try:
             observation = await tool.execute(ToolEnv(context=context, runtime=self), **arguments)
-        except (BudgetExceeded, Cancelled):
-            # 한도·취소 신호는 관찰로 바꾸지 않는다 — SpawnAgentTool처럼 Tool 안에서 spawn을
+        except (BudgetExceeded, Cancelled, ProviderError):
+            # 한도·취소·인프라 오류 신호는 관찰로 바꾸지 않는다 — SpawnAgentTool처럼 Tool 안에서 spawn을
             # 호출하는 경우 여기서 삼키면 취소가 먹지 않는다 (ADR-0007/0011).
             raise
         except Exception as exc:
@@ -276,6 +277,16 @@ class Runtime:
         """Strategy 실행 + 한도 초과를 결과 계약으로 변환. Agent.run과 spawn_agent가 공유한다."""
         try:
             return await strategy.execute(context, runtime or self)
+        except ProviderError as exc:
+            # 인프라 오류(429·5xx·타임아웃·인증) — 재시도까지 소진된 상태다.
+            # 예산 소진과 같은 상황이므로 같은 결말을 준다: 지금까지의 답을 살린다 (ADR-0013).
+            # 프로그래밍 오류는 여기 걸리지 않고 그대로 전파된다 — 사용자가 봐야 한다.
+            logger.warning('run=%s provider.error %s', self.run_id, exc)
+            return AgentResult(
+                status='failed',
+                result=context.last_assistant_text(),
+                metadata={'reason': 'provider_error', 'detail': str(exc)},
+            )
         except Cancelled as exc:
             # 지금까지의 답을 버리지 않는다 — 협조적 취소의 존재 이유다
             return AgentResult(
