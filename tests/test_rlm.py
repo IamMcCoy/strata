@@ -10,6 +10,7 @@ from strata import Agent
 from strata import PythonTool
 from strata import RLMStrategy
 from strata import RuntimeConfig
+from strata import Tool
 
 
 def py(code):
@@ -120,3 +121,31 @@ def test_user_registered_python_tool_wins_over_default():
     )
     assert provider.observations('root')[-1] == 'sandboxed'
     assert result.result == 'ok'
+
+
+def test_sandboxed_python_tool_replaces_the_builtin_one():
+    """격리의 유일한 경로: 같은 name/schema의 Tool을 registry에 등록하면 그것이 쓰인다 (ADR-0015).
+
+    코어는 인프로세스 샌드박스를 만들지 않는다 — 이 교체점이 그 결정의 대가를 갚는 지점이므로
+    회귀하면 "격리는 앱의 몫"이라는 주장이 근거를 잃는다.
+    """
+    class SandboxedPython(Tool):
+        name = 'python'  # PythonTool과 같은 이름 → registry가 이긴다
+        description = 'Execute Python code in an isolated container'
+        input_schema = {'type': 'object', 'properties': {'code': {'type': 'string'}}, 'required': ['code']}
+
+        def __init__(self):
+            self.ran = []
+
+        async def execute(self, env, code='', **kwargs):
+            self.ran.append(code)
+            return 'sandboxed output'
+
+    sandbox = SandboxedPython()
+    provider = TaskScriptedProvider({'root': [py('open("/etc/passwd")'), final('done')]})
+    agent = Agent(provider=provider, strategy=RLMStrategy(), tools=[sandbox])
+    result = asyncio.run(agent.run('root'))
+
+    assert result.status == 'completed'
+    assert sandbox.ran == ['open("/etc/passwd")']          # 샌드박스가 받았다
+    assert provider.observations('root') == ['sandboxed output']
