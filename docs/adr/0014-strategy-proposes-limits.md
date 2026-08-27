@@ -37,7 +37,13 @@
   (`tests/test_strategy_limits.py::test_reflection_rounds_four_now_completes`).
 - 전략이 기본값보다 **높은** 한도를 제안할 수 있다 — "네가 설정한 동작을 하려면 구조적으로
   이만큼 필요하다"는 선언이고, 사용자가 `RuntimeConfig`로 명시하면 언제나 사용자가 이긴다.
-  한도는 run 전체 공유이므로 중첩된 worker(예: `worker=RecursiveStrategy()`)에도 같은 값이 적용된다.
+- **파생된 한도는 하한이지 상한이 아니다.** 한도는 run 전체가 공유하므로, 공식이 기본값보다
+  낮다고 내리면 중첩된 worker(예: `worker=RecursiveStrategy()`)가 재귀 위임에 쓸 자식 수까지
+  같이 조여진다. `ReflectionStrategy(rounds=2)`는 child 5개면 되지만 아무것도 제안하지 않고,
+  `rounds=4`일 때만 8 → 9로 올린다
+  (`tests/test_strategy_limits.py::test_derived_limit_only_raises_never_tightens`).
+  사용자가 **명시적으로** 넘긴 한도(`ReActStrategy(max_iterations=10)`)는 조이는 것이 의도이므로
+  그대로 적용된다 — 파생값에만 적용되는 규칙이다.
 - 알고 받아들인 비용: "사용자가 명시했는가"를 `RuntimeConfig()` 기본값과의 비교로 판단한다.
   사용자가 기본값과 똑같은 값을 명시하면 전략이 이긴다. 구분해야 할 날이 오면 필드 기본값을
   `None`으로 바꾸고 해석을 뒤로 미뤄야 한다 — 그때까지는 한 줄로 둔다.

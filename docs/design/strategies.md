@@ -61,7 +61,7 @@ Agent(provider=p, strategy=ReflectionStrategy(rounds=4),
 | ReAct | `max_iterations`, `token_budget`, `timeout` | (없음) | `prompt`, `model_params` |
 | Recursive | + `max_depth`, `max_children` | (없음) | (상속) |
 | RLM | + `max_depth`, `max_children` | (없음) | (상속) |
-| Reflection | **`max_children`** (아래 참조) | `max_children = 1 + rounds*2` | `rounds`, `worker`, `critic_prompt` |
+| Reflection | **`max_children`** (아래 참조) | `max_children ≥ 1 + rounds*2` (하한, 올리기만) | `rounds`, `worker`, `critic_prompt` |
 
 한도를 Strategy로 **옮기지는** 않는다. `max_iterations`는 "ReAct의 루프 상한"이 아니라
 **노드당 `generate` 호출 상한**이고, 강제를 전략으로 옮기면 Custom Strategy가 `runtime.generate`를
@@ -71,6 +71,10 @@ Agent(provider=p, strategy=ReflectionStrategy(rounds=4),
 `rounds`는 반대 방향이다 — `RuntimeConfig`에 넣지 않는다. 2라운드를 도는 것은 폭주가 아니라
 Reflection의 정의이고, 넣는 순간 Reflection을 쓰지 않는 사용자도 보는 설정이 된다.
 대신 rounds에서 파생되는 **한도**(`max_children`)를 전략이 계산해 제안한다.
+
+**파생된 한도는 하한이다 — 올리기만 하고 내리지 않는다.** 한도는 run 전체가 공유하므로,
+`rounds=2`가 필요한 child 5개에 맞춰 `max_children`을 8에서 내리면 `worker`가 재귀 위임에
+쓸 자식 수까지 같이 조여진다. 모자랄 때만 올린다.
 
 ## 지시(instructions)와 Context
 

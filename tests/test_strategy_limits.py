@@ -77,6 +77,22 @@ def test_reflection_proposes_the_children_its_rounds_need():
     assert ReflectionStrategy(rounds=4, max_children=3).limits == {'max_children': 3}
 
 
+def test_derived_limit_only_raises_never_tightens():
+    """회귀: 파생 한도는 하한이다.
+
+    rounds=2는 child 5개면 되지만, 그렇다고 max_children을 8→5로 내리면 한도가 run 전체
+    공유이므로 worker(Recursive 등)가 재귀 위임에 쓸 자식 수까지 같이 조여진다.
+    """
+    assert ReflectionStrategy(rounds=0).limits == {}
+    assert ReflectionStrategy(rounds=2).limits == {}
+    agent = Agent(
+        provider=ScriptedProvider([final('ok')]),
+        strategy=ReflectionStrategy(rounds=2, worker=ProbeStrategy()),
+    )
+    asyncio.run(agent.run('t'))
+    assert agent.runtime.config.max_children == 8  # worker가 쓸 여유가 깎이지 않았다
+
+
 def test_reflection_rounds_four_now_completes():
     """회귀: 기본 max_children=8 아래에서는 4라운드가 2라운드 만에 조용히 잘렸다."""
     class Provider(ScriptedProvider):

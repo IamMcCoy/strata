@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from strata.agent.context import Context
+from strata.runtime.config import RuntimeConfig
 from strata.runtime.runtime import Runtime
 from strata.strategies.base import AgentResult
 from strata.strategies.base import Strategy
@@ -87,7 +88,13 @@ class ReflectionStrategy(Strategy):
     ):
         # 이 전략이 쓰는 child 수는 rounds에서 정해진다 — 사용자가 공식을 알아내 RuntimeConfig를
         # 고치게 하지 않고 전략이 제안한다. 명시적으로 준 max_children이 있으면 그것이 이긴다.
-        super().__init__(**{'max_children': 1 + rounds * 2, **limits})
+        #
+        # 파생된 한도는 **하한**이지 상한이 아니다: 기본값보다 낮을 때 내리면 한도가 run 전체
+        # 공유이므로 worker(예: RecursiveStrategy)가 재귀 위임에 쓸 자식 수까지 같이 조여진다.
+        # 필요한 만큼만 올리고, 모자라지 않으면 아무것도 제안하지 않는다.
+        needed = 1 + rounds * 2
+        raise_to = {'max_children': needed} if needed > RuntimeConfig().max_children else {}
+        super().__init__(**{**raise_to, **limits})
         self.rounds = rounds
         # 초안·수정을 맡는 child의 전략. 기본은 ReAct — tool을 쓰는 초안이 필요하면 tools만 주면 된다.
         self.worker = worker or ReActStrategy()
