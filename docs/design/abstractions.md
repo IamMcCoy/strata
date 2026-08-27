@@ -367,11 +367,25 @@ messages=[*(history or []), {'role': 'user', 'content': task}]
 `ReActStrategy`가 저 둘을 쌍으로 쌓으므로(`react.py`), tool을 쓰는 에이전트의 history는
 **쌍의 경계에서만** 잘라야 한다. 반대(호출만 남고 결과가 없음)도 거부당한다.
 
+이건 매번 다시 짜기엔 틀리기 쉬워서 코어가 함수 하나를 준다 — **정책이 아니라 안전한 지점**이다:
+
+```python
+from strata import trim_history
+
+history = trim_history(db.load(session_id), keep_turns=10)
+result = await agent.run(task, history=history)
+```
+
+턴은 `role='user'`에서 시작하고 그 턴의 tool 왕복은 다음 user 전까지 전부 따라오므로,
+**턴 경계가 곧 안전 지점**이다. `keep_turns`가 메시지 수가 아니라 턴 수인 이유이기도 하다:
+tool을 쓰면 한 턴이 메시지 열 개가 되기도 해서 메시지 수는 예측할 수 없다.
+자동으로 부르지는 않는다 — `Agent.run`은 여전히 받은 것을 그대로 쓴다.
+
 **정책 네 가지.**
 
 | | 방법 | 어디에 | 비고 |
 |---|---|---|---|
-| A | 슬라이딩 윈도우(최근 N턴) | 앱 | 가장 단순. 위 쌍 경계를 지켜야 한다 |
+| A | 슬라이딩 윈도우(최근 N턴) | **코어가 `trim_history`를 준다** | 정책이 아니라 안전한 자르는 지점 — 턴 경계에서만 자른다 |
 | B | 토큰 기반 트리밍 | 앱 | 토크나이저 의존성 — 코어에 둘 수 없다 |
 | C | 오래된 턴을 요약으로 대체 | 앱 / Strategy | LLM 호출 비용이 든다 |
 | D | 오래된 대화에서 **사실만** Memory로 옮기고 원문은 버린다 | 앱 + `MemoryTool` | 이 설계에 가장 맞는다 |

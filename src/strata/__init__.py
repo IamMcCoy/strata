@@ -5,6 +5,7 @@ import logging
 
 from strata.agent.agent import Agent
 from strata.agent.context import Context
+from strata.conversation import trim_history
 from strata.memory.base import Memory
 from strata.memory.base import MemoryItem
 from strata.memory.inmemory import InMemory
@@ -82,5 +83,6 @@ __all__ = [
     'Tool',
     'ToolCall',
     'ToolEnv',
+    'trim_history',
     'new_run_id',
 ]
