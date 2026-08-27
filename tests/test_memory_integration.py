@@ -39,6 +39,9 @@ except ImportError:  # pragma: no cover - dev 의존성 미설치
     redis_asyncio = None
 
 
+pytestmark = pytest.mark.integration
+
+
 def _redis_is_up() -> bool:
     if redis_asyncio is None:
         return False

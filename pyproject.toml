@@ -35,3 +35,9 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/strata"]
+
+[tool.pytest.ini_options]
+# 기본 `pytest`는 외부 의존이 0인 것만 돈다. 통합 테스트는 실제 Redis·멀티프로세스·
+# **유료 API**를 쓰므로 명시적으로 부를 때만 돈다 — `make test-integration`.
+markers = ['integration: 외부 서비스나 실제 API가 필요하다 (기본 실행에서 제외)']
+addopts = '-m "not integration"'

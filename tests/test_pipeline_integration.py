@@ -31,6 +31,9 @@ REDIS_PORT = int(os.getenv('REDIS_PORT', '6379'))
 ROOT = Path(__file__).parent.parent
 
 
+pytestmark = pytest.mark.integration
+
+
 def _redis_is_up() -> bool:
     try:
         socket.create_connection((REDIS_HOST, REDIS_PORT), timeout=0.5).close()

@@ -16,7 +16,8 @@ Phase 9(Plugin)이고 둘 다 소비자가 생길 때까지 미룬다.
 
 ```bash
 uv sync                              # 환경 생성 (Python 3.12, dev 그룹 포함)
-uv run pytest                        # 전체 테스트
+uv run pytest                        # 단위 테스트 — 외부 의존 0, 네트워크로 나가지 않는다
+uv run pytest -m integration         # 통합 테스트 — 실제 Redis·멀티프로세스·실제 API(유료 가능)
 uv run pytest tests/test_smoke.py::test_agent_delegates_to_strategy   # 단일 테스트
 uv run pre-commit run --all-files    # lint/포맷/타입 검사 전체 (커밋 시 자동 실행됨)
 scripts/check_install.sh             # wheel 빌드 → 깨끗한 venv 설치 → 소비자 시나리오 검증
