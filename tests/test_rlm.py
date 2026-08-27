@@ -38,10 +38,15 @@ def test_context_is_a_variable_not_a_message_and_state_persists():
     assert 'llm_query' in first_call[0]['content']
     # 두 번째 호출이 첫 호출의 변수 n을 본다 — REPL 상태 유지
     assert provider.observations('count')[-1] == '5000 xxx\n'
-    # 두 번째 호출의 system에는 새 변수 n이 나타나고, 주입된 helper(llm_query/print)는 변수로 노출되지 않는다
+    # 두 번째 호출의 system에는 새 변수 n이 나타난다
     _, second_call = provider.seen[1]
-    assert '- n: int' in second_call[0]['content']
-    assert '- llm_query' not in second_call[0]['content'] and '- print' not in second_call[0]['content']
+    system = second_call[0]['content']
+    assert '- n: int' in system
+    # 주입 helper는 '변수'가 아니므로 변수 목록에는 없지만, 별도 절에 반드시 있어야 한다 —
+    # 없으면 약한 모델이 "llm_query는 없다"고 결론내고 재귀를 포기한다(실측: Gemma4-12B).
+    variables_section = system.split('## Always injected')[0]
+    assert '- llm_query' not in variables_section and '- print' not in variables_section
+    assert '- llm_query(prompt: str, context=None) -> str' in system
 
 
 def test_llm_query_spawns_child_with_sub_context():

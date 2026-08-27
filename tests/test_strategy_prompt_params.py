@@ -104,7 +104,9 @@ def test_rlm_system_is_instructions_then_prompt_then_live_variables():
     asyncio.run(agent.run('go', context='abc'))
     system = provider.seen[0][0]['content']
     assert system.startswith(f'USER\n\n{RLM_PROMPT}\n\n')
-    assert system.endswith('- context: str, len=3')
+    assert '- context: str, len=3' in system
+    # 변수 목록 뒤에 주입 helper 절이 붙는다 — 둘 다 environment()의 몫이다
+    assert system.endswith('- llm_query(prompt: str, context=None) -> str')
 
 
 def test_environment_hook_is_appended_after_prompt():
