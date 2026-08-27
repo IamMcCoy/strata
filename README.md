@@ -62,10 +62,15 @@ Claude와 Gemini뿐 — 둘 다 메시지 형식이 근본적으로 다르다.
 
 ### Strategy
 
-`ReActStrategy` / `RecursiveStrategy` / `RLMStrategy`.
+`ReActStrategy` / `RecursiveStrategy` / `RLMStrategy` / `ReflectionStrategy`.
 각 Strategy는 자기 패턴의 harness prompt(tool 규율·종료 규약·위임 규칙)를 갖고
 system = `instructions` + `prompt` + 현재 상태로 조립한다. Tool은 `execute(self, env, **kwargs)`
 하나만 구현한다.
+
+`ReflectionStrategy`는 초안·비판·수정을 전부 child로 띄우는 오케스트레이터라
+스스로 `generate`를 부르지 않는다 — child가 parent 대화를 못 본다는 불변식이 그대로
+"자기 초안에 물들지 않은 비판자"가 된다. 전략 조합은 `worker=`로 한다:
+`ReflectionStrategy(rounds=2, worker=RecursiveStrategy())`.
 
 ## 주요 기능
 
@@ -161,9 +166,10 @@ make redis-up && uv run python examples/worker.py   # Redis 큐 + 워커 2프로
 
 ## 상태
 
-Phase 1~6.5 완료 — ReAct/Recursive/RLM Strategy, Runtime 한도 전체, Memory 3종,
-멀티턴, 취소, 스트리밍, Provider 4종, 로깅·노드별 토큰.
-다음은 Phase 7(Reflection). 상세는 [로드맵](docs/roadmap.md).
+Phase 1~8 완료(6 제외) — ReAct/Recursive/RLM/Reflection Strategy, 전략 조합,
+Runtime 한도 전체, Memory 3종, 멀티턴, 취소, 스트리밍, Provider 4종, 로깅·노드별 토큰.
+남은 것은 Phase 6(Events)·Phase 9(Plugin) — 둘 다 소비자가 생길 때까지 미룬다.
+상세는 [로드맵](docs/roadmap.md).
 
 ## 개발 환경
 

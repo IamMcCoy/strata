@@ -7,8 +7,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **Strata** — 다양한 Agentic Pattern(ReAct, Recursive/RLM, Reflection, …)을 하나의 Runtime 위에서
 조합·실행하는 확장형 Agent Execution Framework. Python 3.12, 런타임 의존성 0개.
 
-Phase 1~3·5 완료(ReAct / Recursive / RLM Strategy, Runtime 한도 전체). 다음은 Phase 4(Memory)·
-Phase 6(Events). 구현 순서와 각 Phase의 완료 기준은 `docs/roadmap.md`를 따른다.
+Phase 1~8 완료(6 제외) — ReAct / Recursive / RLM / Reflection Strategy, 전략 조합,
+Runtime 한도 전체, Memory 3종, 멀티턴·취소·스트리밍·관찰. 남은 것은 Phase 6(Events)·
+Phase 9(Plugin)이고 둘 다 소비자가 생길 때까지 미룬다.
+구현 순서와 각 Phase의 완료 기준은 `docs/roadmap.md`를 따른다.
 
 ## 명령어
 

@@ -120,15 +120,20 @@ vLLM은 스트리밍·usage까지 실제로 확인했다(tool은 서버가 `--en
 `run_strategy`가 계약으로 변환한다. 인프라 오류는 지금까지의 답과 함께 `status='failed'`로
 끝나고, 프로그래밍 오류는 그대로 전파된다. 폴백은 `FallbackProvider`로 코어 밖에 둔다.
 
-## Phase 7 — Reflection
+## Phase 7 — Reflection ✅
 
 ```text
 Generate → Critique → Revision → Critique → Final
 ```
 
-- 완료 기준: `examples/reflection.py` 동작.
+초안·비판·수정을 전부 child로 띄우는 오케스트레이터다 — 스스로 `generate`를 부르지 않는
+첫 전략이고, 그래서 비판자의 문맥 격리가 기존 불변식에서 공짜로 따라온다.
+라운드는 고정(`rounds=2`)이고 조기 종료를 두지 않는다: 비판자에게 "이제 충분한가"를 묻는
+순간 모델이 스스로 만족했는지 판단하게 되고, 그걸 막는 것이 이 패턴의 존재 이유다.
 
-## Phase 8 — Strategy Composition
+- 완료 기준: `examples/reflection.py` 동작 (`tests/test_reflection.py`).
+
+## Phase 8 — Strategy Composition ✅ (Phase 7에서 흡수)
 
 ```text
 Recursive
@@ -136,7 +141,14 @@ Recursive
       └── Reflection
 ```
 
-- 완료 기준: `spawn_agent(strategy=...)` 로 child의 전략을 지정해 위 조합이 동작한다.
+`ReflectionStrategy`가 `spawn_agent(strategy=...)`의 첫 소비자다 — 선택이 아니라 필수였다:
+인자를 생략하면 child가 parent의 전략(=Reflection)을 상속해 `max_depth`까지 재귀한다.
+`worker=`를 갈아끼우면 위 조합이 그대로 성립한다.
+
+- 완료 기준: `spawn_agent(strategy=...)` 로 child의 전략을 지정해 위 조합이 동작한다
+  (`tests/test_reflection.py::test_children_run_the_worker_strategy_not_reflection`).
+- `SpawnAgentTool`에는 `strategy`를 노출하지 않는다 — 모델이 전략을 고르려면 문자열 → 클래스
+  레지스트리가 필요해지고, 소비자 없이 Phase 9를 앞당긴다. 전략 조합은 코드가 정한다.
 
 ## Phase 9 — Plugin Architecture
 

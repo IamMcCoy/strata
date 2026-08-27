@@ -31,6 +31,8 @@ from strata.strategies.react import REACT_PROMPT
 from strata.strategies.react import ReActStrategy
 from strata.strategies.recursive import RECURSIVE_PROMPT
 from strata.strategies.recursive import RecursiveStrategy
+from strata.strategies.reflection import REFLECTION_CRITIC_PROMPT
+from strata.strategies.reflection import ReflectionStrategy
 from strata.strategies.rlm import RLM_PROMPT
 from strata.strategies.rlm import RLMStrategy
 from strata.tools.base import Tool
@@ -65,10 +67,12 @@ __all__ = [
     'PythonTool',
     'REACT_PROMPT',
     'RECURSIVE_PROMPT',
+    'REFLECTION_CRITIC_PROMPT',
     'RLMStrategy',
     'RLM_PROMPT',
     'ReActStrategy',
     'RecursiveStrategy',
+    'ReflectionStrategy',
     'RedisMemory',
     'Runtime',
     'RuntimeConfig',
