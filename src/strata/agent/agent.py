@@ -5,6 +5,7 @@ import logging
 from typing import Any
 
 from strata.agent.context import Context
+from strata.runtime.config import resolve_limits
 from strata.runtime.config import RuntimeConfig
 from strata.runtime.runtime import Runtime
 from strata.strategies.base import AgentResult
@@ -66,8 +67,11 @@ class Agent:
           앱이 자기 저장소에서 읽어 넘기고 `result.metadata['messages']`를 다시 저장한다.
           Memory와 혼동하지 말 것: history는 순서 있는 원문, Memory는 순서 없는 사실이다.
         """
+        # 전략이 제안한 한도를 사용자가 명시하지 않은 자리에만 채운다 (ADR-0014).
+        # root 전략에서 한 번만 — 한도는 run 전체가 공유하므로 child가 다시 올리지 않는다.
+        config = resolve_limits(self.config, self.strategy.limits)
         runtime = self.runtime = Runtime(
-            provider=self.provider, tools=self.tools, memory=self.memory, config=self.config,
+            provider=self.provider, tools=self.tools, memory=self.memory, config=config,
             on_delta=self.on_delta,
         )
         runtime.default_strategy = self.strategy  # spawn 시 strategy 미지정이면 상속 (ADR-0006)
@@ -80,13 +84,13 @@ class Agent:
             metadata={'task': task, 'execution_id': node.id},
         )
         try:
-            async with asyncio.timeout(self.config.timeout):  # None이면 무제한
+            async with asyncio.timeout(config.timeout):  # None이면 무제한
                 result = await runtime.run_strategy(self.strategy, ctx)
         except TimeoutError:
             result = AgentResult(
                 status='budget_exceeded',
                 result=ctx.last_assistant_text(),
-                metadata={'reason': 'timeout', 'limit': self.config.timeout},
+                metadata={'reason': 'timeout', 'limit': config.timeout},
             )
         except asyncio.CancelledError:
             # 하드 취소(asyncio) — 프로그래밍 오류와 다른 사건이므로 tree에도 다르게 남긴다.

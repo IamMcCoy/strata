@@ -38,27 +38,39 @@ runtime.execution
 
 전략에 붙는 값은 두 종류이고 소유자가 다르다. 섞으면 안전 속성이 깨진다.
 
+전략에 붙는 값은 두 종류다. **둘 다 생성자에서 받지만 소유자가 다르다**
+([ADR-0014](../adr/0014-strategy-proposes-limits.md)).
+
 |  | **한도(limit)** | **패턴 knob** |
 | --- | --- | --- |
 | 목적 | 폭주·비용 폭발 방지 | 그 패턴의 동작 정의 |
-| 소유 | `RuntimeConfig` — Runtime이 강제 | `Strategy.__init__` 인자 |
+| 값을 제안 | `Strategy.limits` (전략만 아는 공식이 있을 때) | `Strategy.__init__` 인자 |
+| **강제** | **Runtime** — 전략이 몰라도 걸린다 | 없음 |
 | 초과하면 | `budget_exceeded` 계약 반환 | "초과"라는 개념이 없다 |
-| 전략이 몰라도 | **걸린다** | 해당 없음 |
+| 최종 결정 | 사용자 `RuntimeConfig` > `Strategy.limits` > 기본값 | 생성자 인자 그대로 |
 
-| Strategy | 실질적으로 걸리는 한도 | knob |
-| --- | --- | --- |
-| ReAct | `max_iterations`, `token_budget`, `timeout` | `prompt`, `model_params` |
-| Recursive | + `max_depth`, `max_children` | (상속) |
-| RLM | + `max_depth`, `max_children` | (상속) |
-| Reflection | **`max_children`** (아래 참조) | `rounds`, `worker`, `critic_prompt` |
+```python
+Agent(provider=p, strategy=ReflectionStrategy(rounds=4))       # child 9개가 필요함을 전략이 안다
+Agent(provider=p, strategy=ReActStrategy(max_iterations=10))   # 루프 상한을 전략 옆에서 준다
+Agent(provider=p, strategy=ReflectionStrategy(rounds=4),
+      config=RuntimeConfig(max_children=3))                    # 사용자가 명시하면 언제나 사용자가 이긴다
+```
 
-`max_iterations`는 "ReAct의 루프 상한"이 아니라 **노드당 `generate` 호출 상한**이다.
-ReActStrategy로 옮기면 Custom Strategy가 `runtime.generate`를 무한히 부를 수 있게 되고,
-"한도를 몰라도 Runtime이 막아 준다"는 확장점의 안전 속성이 사라진다 — 이름이 특정 전략을
-연상시킬 뿐 소유권은 Runtime이 맞다.
+| Strategy | 실질적으로 걸리는 한도 | 스스로 제안하는 값 | knob |
+| --- | --- | --- | --- |
+| ReAct | `max_iterations`, `token_budget`, `timeout` | (없음) | `prompt`, `model_params` |
+| Recursive | + `max_depth`, `max_children` | (없음) | (상속) |
+| RLM | + `max_depth`, `max_children` | (없음) | (상속) |
+| Reflection | **`max_children`** (아래 참조) | `max_children = 1 + rounds*2` | `rounds`, `worker`, `critic_prompt` |
 
-같은 이유로 `rounds`는 `RuntimeConfig`에 넣지 않는다. 2라운드를 도는 것은 폭주가 아니라
+한도를 Strategy로 **옮기지는** 않는다. `max_iterations`는 "ReAct의 루프 상한"이 아니라
+**노드당 `generate` 호출 상한**이고, 강제를 전략으로 옮기면 Custom Strategy가 `runtime.generate`를
+무한히 부를 수 있게 되어 "한도를 몰라도 Runtime이 막아 준다"는 확장점의 안전 속성이 사라진다.
+바뀐 것은 *누가 기본값을 제안하는가*뿐이다.
+
+`rounds`는 반대 방향이다 — `RuntimeConfig`에 넣지 않는다. 2라운드를 도는 것은 폭주가 아니라
 Reflection의 정의이고, 넣는 순간 Reflection을 쓰지 않는 사용자도 보는 설정이 된다.
+대신 rounds에서 파생되는 **한도**(`max_children`)를 전략이 계산해 제안한다.
 
 ## 지시(instructions)와 Context
 
@@ -339,7 +351,8 @@ class ReflectionStrategy(Strategy):
   비판 라운드에서도 유지되어야 한다.
 - **이 노드에는 `max_iterations`가 걸리지 않는다** — `generate`를 직접 부르지 않기 때문이다.
   실질 상한은 `max_children`(child 수 = `1 + rounds*2`)이고, 초과분은 계약으로 돌아와
-  루프를 끝내며 지금까지의 최선을 답으로 삼는다.
+  루프를 끝내며 지금까지의 최선을 답으로 삼는다. 그 공식은 전략이 `limits`로 제안하므로
+  `rounds=4`도 별도 설정 없이 돈다 ([ADR-0014](../adr/0014-strategy-proposes-limits.md)).
 - **중간 초안은 `evidence`에, 최신 초안 하나만 `context.messages`에** — 취소·한도로 끊겨도
   `last_assistant_text()`가 살리고, 멀티턴 transcript에는 중간 초안이 쌓이지 않는다.
 - **`SpawnAgentTool`에는 `strategy`를 노출하지 않는다** — 모델이 전략을 고르게 하려면

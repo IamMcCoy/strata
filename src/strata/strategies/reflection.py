@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from strata.agent.context import Context
 from strata.runtime.runtime import Runtime
 from strata.strategies.base import AgentResult
@@ -81,7 +83,11 @@ class ReflectionStrategy(Strategy):
         rounds: int = 2,
         worker: Strategy | None = None,
         critic_prompt: str = REFLECTION_CRITIC_PROMPT,
+        **limits: Any,
     ):
+        # 이 전략이 쓰는 child 수는 rounds에서 정해진다 — 사용자가 공식을 알아내 RuntimeConfig를
+        # 고치게 하지 않고 전략이 제안한다. 명시적으로 준 max_children이 있으면 그것이 이긴다.
+        super().__init__(**{'max_children': 1 + rounds * 2, **limits})
         self.rounds = rounds
         # 초안·수정을 맡는 child의 전략. 기본은 ReAct — tool을 쓰는 초안이 필요하면 tools만 주면 된다.
         self.worker = worker or ReActStrategy()

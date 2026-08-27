@@ -67,6 +67,10 @@ scripts/check_install.sh             # wheel 빌드 → 깨끗한 venv 설치 �
    시점 상태)로 `instructions()`가 붙인다 — 변하는 것은 prompt에 구멍을 뚫지 말고 `environment()`로.
    모델 파라미터(temperature 등)는 코어가 해석하지 않는 dict이며 우선순위(Strategy > Provider 기본값)는
    `Runtime.generate`의 merge 한 줄에만 있다 — Provider 구현에서 다시 합치지 않는다.
+   실행 한도도 같은 이음매다: 전략은 `Strategy.limits`로 **제안만** 하고(`ReflectionStrategy(rounds=4)`
+   → `max_children=9`), 강제는 여전히 Runtime이며 우선순위(사용자 `RuntimeConfig` > `Strategy.limits`
+   > 기본값)는 `Agent.run`의 `resolve_limits` 한 줄에만 있다 (ADR-0014). 한도를 Strategy로 옮기지 않는다 —
+   Custom Strategy가 한도를 몰라도 걸리는 것이 확장점의 안전 속성이다.
 
 설계가 바뀌는 변경은 해당 `docs/design/*.md`를 같은 커밋/PR에서 갱신하고,
 되돌리기 비싼 결정은 `docs/adr/`에 새 ADR로 기록한다 (기존 ADR은 supersede, 삭제 금지).

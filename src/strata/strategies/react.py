@@ -60,7 +60,16 @@ class ReActStrategy(Strategy):
     # 그대로 전달한다 — Provider 기본값보다 우선. 클래스 기본값은 읽기 전용(super().__init__ 없는 서브클래스 보호).
     model_params: Mapping[str, Any] = MappingProxyType({})
 
-    def __init__(self, *, prompt: str | None = None, model_params: dict[str, Any] | None = None):
+    def __init__(
+        self,
+        *,
+        prompt: str | None = None,
+        model_params: dict[str, Any] | None = None,
+        **limits: Any,
+    ):
+        # limits는 RuntimeConfig 필드 이름 — ReActStrategy(max_iterations=10) 처럼 전략에 붙여 준다.
+        # 재귀 계열은 max_depth/max_children을 같은 자리에서 받는다 (ADR-0014).
+        super().__init__(**limits)
         if prompt is not None:
             self.prompt = prompt
         if model_params:
