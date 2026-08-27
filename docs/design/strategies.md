@@ -28,8 +28,8 @@ runtime.execution
 
 `runtime.provider`를 직접 호출하지 않는다 — 한도·집계·이벤트가 `generate`에 걸려 있다.
 
-구현: `ReActStrategy`, `RecursiveStrategy`, `RLMStrategy`, `ReflectionStrategy`.
-향후: `PlanExecuteStrategy`, `RouterStrategy`,
+구현: `ReActStrategy`, `RecursiveStrategy`, `RLMStrategy`, `ReflectionStrategy`, `RouterStrategy`.
+향후: `PlanExecuteStrategy`,
 `DebateStrategy`, `SelfConsistencyStrategy`, `MultiAgentStrategy`, `CustomStrategy`.
 각 패턴의 배경과 Strata primitive 매핑은
 [agentic-patterns-background.md](../overview/agentic-patterns-background.md) 참조.
@@ -365,31 +365,48 @@ class ReflectionStrategy(Strategy):
 
 검증: `tests/test_reflection.py`, `examples/reflection.py`.
 
-## Router Strategy (Phase 8)
+## Router Strategy
 
-쿼리 하나에 대해 **어느 Strategy가 최선인지** 모델이 고르고, 고른 Strategy가 끝까지 푼다.
+쿼리 하나에 대해 **어느 Strategy가 최선인지** 고르고, 고른 Strategy가 끝까지 푼다.
 supervisor(작업 분해·위임)가 아니라 바깥 껍데기다 — 문제를 "푸는" 패턴이 아니라 "배분하는" 패턴.
 
 ```text
-Task → (규칙: context 있음 → RLM) → 없으면 generate 1회로 분류 → spawn_agent(task, strategy=routes[name]) → 계약 그대로 반환
+Task → (규칙: variables['context'] 있음 → rlm) → 없으면 generate 1회로 분류 → 고른 전략을 같은 Context에서 실행
 ```
 
 ```python
-class RouterStrategy(Strategy):
-    routes: dict[str, Strategy]      # {'react': ReActStrategy(), 'rlm': RLMStrategy(), ...}
-    default: str                     # 분류 실패 시
+RouterStrategy(
+    {'react': ReActStrategy(), 'rlm': RLMStrategy(), 'reflection': ReflectionStrategy()},
+    default='react',            # 분류 실패는 전체 실패이므로 필수 인자
+    context_route='rlm',        # 거대 입력이 오면 묻지 않고 갈 곳. None이면 규칙을 끈다
+)
 ```
 
 결정 사항:
 
-- **각 Strategy는 `description`("언제 나를 쓰나" 한 줄)을 갖는다** — Tool이 `description`을 갖는 것과 대칭.
-  라우터는 routes의 description을 모아 분류 프롬프트를 만든다.
-- **분류는 free-text가 아니라 tool call** — `route(strategy: enum[routes])` tool을 광고해 `generate` 1회,
-  `tool_calls[0].arguments['strategy']`를 읽는다. 텍스트로 답하면 `default`.
-- **결정적 규칙이 모델보다 먼저** — `variables['context']`가 있으면 묻지 않고 RLM. 라우팅 실패는 전체 실패이므로
-  `default`는 필수이고, 분류 호출은 싼 모델로 할 수 있다(`provider` 오버라이드).
-- **Runtime 변경 없음** — 라우터가 root, 선택된 전략이 child 노드가 되어 Execution Tree에 "왜 이 전략인가"가 남는다.
-  `spawn_agent(strategy=...)`를 쓰는 두 번째 사례(첫 사례는 Reflection).
+- **각 Strategy는 `description`("언제 나를 쓰나" 한 줄)을 갖는다** — `Tool.description`과 대칭.
+  라우터가 routes의 description을 모아 분류 프롬프트를 만든다. 비어 있으면 클래스 이름으로
+  대신하므로 **커스텀 전략이 이걸 몰라도 라우팅에 낀다**.
+- **분류는 free-text가 아니라 tool call** — `route(strategy: enum[routes])`를 광고해 `generate`
+  1회, `tool_calls[0].arguments['strategy']`를 읽는다. enum이라 고를 수 있는 값이 스키마로
+  고정된다("아마 Reflection이 좋을 것 같은데 ReAct도…" 같은 답이 불가능해진다).
+  텍스트로 답하면 `default`.
+- **결정적 규칙이 모델보다 먼저** — `variables['context']`가 있다는 것은 "한 윈도우에 안
+  들어간다"는 *사실*이지 판단이 아니다. 모델에게 물으면 토큰만 쓰고 틀릴 기회만 준다.
+  이 경우 `generate`는 0회다.
+- **고른 전략을 같은 Context에서 직접 실행한다** — `spawn_agent`로 child를 띄우지 않는다.
+  child는 `messages=[task]` 하나뿐이라 대화 이력을 못 보므로, 라우터를 씌우는 순간 멀티턴이
+  깨진다 (ADR-0010). 대신 Execution Tree에 별도 노드가 생기지 않으므로 "왜 이 전략인가"는
+  `result.metadata['route']`와 `router.selected` 로그에 남긴다.
+  (이 절의 이전 판은 child로 띄우라고 적혀 있었다 — 멀티턴이 생기기 전에 쓴 문장이다.)
+- **확장 지점 셋**: `routes`(아무 Strategy나), `context_route`(규칙이 갈 곳), `classify()`
+  (분류 로직 전체 — 규칙 기반·임베딩 기반으로 갈아끼우거나 분류만 싼 모델로 돌리는 것도 여기).
+
+실측(vLLM `Gemma4-12B-it`): 5개 과제 중 4개를 기대대로 라우팅했고, 5번 모두 유효한 tool call을
+냈다(`default` 폴백 0회). 같은 모델이 RLM의 다단계 오케스트레이션에서는 무너졌던 것과 대비된다 —
+enum 하나를 고르는 일은 작은 모델에도 무겁지 않다. 분류를 싼 모델로 돌리는 근거이기도 하다.
+
+검증: `tests/test_router.py`, `examples/router.py`.
 
 ## Strategy Composition (Phase 8)
 
