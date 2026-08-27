@@ -1,23 +1,32 @@
 #!/usr/bin/env python3
-"""strata 자기검사 — 이 저장소의 코드를 strata에 먹여 불변식 위반을 찾는다.
+"""규칙 문서가 말하는 것을 코드가 실제로 지키는지 실제 모델로 검사한다.
 
-실행:
-    OPENAI_BASE_URL=http://192.168.1.70:32757/v1 OPENAI_MODEL=Gemma4-12B-it \
-        uv run python scripts/selfcheck.py [--verbose]
+기본은 자기 자신(strata)이고, 아무 저장소나 겨눌 수 있다:
 
-`tests/`도 `examples/`도 아닌 이유: 실제 모델을 부르고 결과가 매번 다르다(테스트에 못 넣는다).
-키·엔드포인트가 필요하다(예제에 못 넣는다). 사람이 필요할 때 돌리는 도구다.
+    # 이 저장소
+    OPENAI_BASE_URL=http://host:port/v1 OPENAI_MODEL=<model> \
+        uv run python scripts/selfcheck.py
+
+    # 남의 저장소 — CLAUDE.md / AGENTS.md 같은 규칙 문서를 겨눈다
+    OPENAI_BASE_URL=... uv run python scripts/selfcheck.py \
+        --repo ~/code/foo --rules ~/code/foo/AGENTS.md
+
+CLAUDE.md·AGENTS.md에 적은 규칙은 **아무도 검사하지 않는다.** 사람이 안 읽거나 모델이
+문맥에서 밀어내면 조용히 어긋나고, 문서와 코드가 갈라진 걸 알아챌 방법이 없다.
+이 스크립트가 그 격차를 실제 모델로 재본다.
+
+`tests/`도 `examples/`도 아닌 자리인 이유: 실제 모델을 부르고 결과가 매번 다르며
+(테스트에 못 넣는다) 키·엔드포인트가 필요하다(예제에 못 넣는다).
 
 동시에 dogfooding이다 — 소비자가 하는 조립을 그대로 한다:
-
-    Provider + Tool + Strategy + instructions → Agent → 파일마다 run()
+Provider + Tool 등록 + Strategy + instructions → 파일마다 Agent.run().
 
 **순회는 파이썬이, 판단만 모델이 한다.** 파일 목록은 이미 아는 결정적 정보라 모델에게
 for문을 대신 쓰게 할 이유가 없다(RLM은 *자르는 법을 모를 때* 쓴다). 실측으로도 12B 모델은
 바깥 루프까지 맡기면 무너졌다 — 가짜 tool call을 텍스트로 뱉고 파일 내용을 지어냈다.
 
-불변식은 하드코딩하지 않고 `CLAUDE.md`에서 읽어 `instructions`로 넣는다(매 run의 system).
-문서가 바뀌면 검사도 바뀐다.
+한 번에 파일 하나만 보므로 **한 파일 안에서 판정 가능한 규칙**만 검사할 수 있다
+("Strategy가 Provider를 직접 import하지 않는다" O, "레이어 A가 B를 통해서만 호출된다" X).
 """
 from __future__ import annotations
 
@@ -26,6 +35,7 @@ import json
 import logging
 import os
 import sys
+from argparse import ArgumentParser
 from pathlib import Path
 from typing import Any
 
@@ -38,24 +48,33 @@ from strata import RuntimeConfig        # noqa: E402
 from strata import Tool                 # noqa: E402
 from strata import ToolEnv              # noqa: E402
 
-ROOT = Path(__file__).resolve().parent.parent
+SELF = Path(__file__).resolve().parent.parent
+
+# 스캔에서 제외할 디렉터리 — 남의 저장소를 겨눌 때 필요하다.
+SKIP = {'.git', '.venv', 'venv', 'node_modules', '__pycache__', 'build', 'dist', '.tox', '.mypy_cache'}
 
 
-def invariants() -> str:
-    """CLAUDE.md의 '아키텍처' 절 원문. 문서가 검사의 단일 출처다."""
-    text = (ROOT / 'CLAUDE.md').read_text(encoding='utf-8')
-    start = text.index('## 아키텍처')
-    end = text.index('\n## ', start + 1)
-    return text[start:end].strip()
+def rules_text(path: Path) -> str:
+    """규칙 문서. strata 자신의 CLAUDE.md면 '## 아키텍처' 절만, 아니면 문서 통째로.
+
+    남의 문서 구조를 추측하지 않는다 — 어느 절이 규칙인지는 저장소마다 다르다.
+    """
+    text = path.read_text(encoding='utf-8')
+    if path.resolve() == (SELF / 'CLAUDE.md').resolve():
+        start = text.index('## 아키텍처')
+        return text[start:text.index('\n## ', start + 1)].strip()
+    return text.strip()
 
 
-def sources() -> dict[str, str]:
-    """검사 대상 = 패키지 소스 전체. messages가 아니라 variables로 들어간다."""
-    return {
-        str(path.relative_to(ROOT)): path.read_text(encoding='utf-8')
-        for path in sorted((ROOT / 'src').rglob('*.py'))
-        if path.stat().st_size > 0
-    }
+def sources(repo: Path) -> dict[str, str]:
+    """검사 대상 파일. src/가 있으면 거기만, 없으면 저장소 전체에서 SKIP을 뺀다."""
+    base = repo / 'src' if (repo / 'src').is_dir() else repo
+    found = {}
+    for path in sorted(base.rglob('*.py')):
+        if SKIP & set(path.parts) or not path.stat().st_size:
+            continue
+        found[str(path.relative_to(repo))] = path.read_text(encoding='utf-8', errors='replace')
+    return found
 
 
 class ReportViolationTool(Tool):
@@ -90,19 +109,19 @@ class ReportViolationTool(Tool):
 
 
 AUDIT_INSTRUCTIONS = """\
-You audit source files of this framework against its architectural invariants.
+You audit source files of a codebase against the project rules stated below.
 
-{invariants}
+{rules}
 
 # How to answer
 - Report a violation only when you can quote the exact line in the file you were given.
 - Use the `report_violation` tool, once per violation. Then reply in plain text.
 - A file that follows the rules is the normal case. If you find nothing, reply exactly: OK
-- Never report style, naming, or design opinions — only the numbered invariants above.
+- Never report style, naming, or design opinions — only the rules stated above.
 - Never guess about code you were not shown. Other files are out of scope."""
 
 FILE_TASK = """\
-Audit {path} against the invariants.
+Audit {path} against the project rules.
 
 # Source
 ```python
@@ -136,13 +155,35 @@ async def audit_file(agent: Agent, path: str, source: str) -> tuple[str, int, in
     return result.status, agent.runtime.usage['total_tokens'], len(result.result or '')
 
 
-async def main() -> int:
-    verbose = '--verbose' in sys.argv
-    logging.basicConfig(
-        level=logging.DEBUG if verbose else logging.INFO,
-        format='%(message)s',
+def parse_args(argv: list[str]):
+    parser = ArgumentParser(description='규칙 문서를 코드가 지키는지 실제 모델로 검사한다')
+    parser.add_argument('--repo', type=Path, default=SELF, help='검사할 저장소 (기본: strata 자신)')
+    parser.add_argument('--rules', type=Path, help='규칙 문서 (기본: <repo>/CLAUDE.md 또는 AGENTS.md)')
+    parser.add_argument('--limit', type=int, help='앞에서 N개 파일만 — 반복 실행용')
+    parser.add_argument('--planted', action='store_true', help='심어둔 위반을 잡는지만 확인한다')
+    parser.add_argument('--yes', action='store_true', help='상용 OpenAI로 나가는 것을 승인한다')
+    parser.add_argument('--verbose', action='store_true')
+    return parser.parse_args(argv)
+
+
+def find_rules(repo: Path, given: Path | None) -> Path:
+    """규칙 문서를 찾는다. 못 찾으면 무엇을 넣어야 하는지 말하고 끝낸다."""
+    if given:
+        return given
+    for name in ('CLAUDE.md', 'AGENTS.md', 'ARCHITECTURE.md', 'CONVENTIONS.md'):
+        candidate = repo / name
+        if candidate.is_file():
+            return candidate
+    raise SystemExit(
+        f'{repo}에서 규칙 문서를 찾지 못했다 (CLAUDE.md / AGENTS.md / ARCHITECTURE.md / '
+        f'CONVENTIONS.md). --rules 로 직접 지정하라.',
     )
-    logging.getLogger('strata').setLevel(logging.DEBUG if verbose else logging.INFO)
+
+
+async def main() -> int:
+    args = parse_args(sys.argv[1:])
+    logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO, format='%(message)s')
+    logging.getLogger('strata').setLevel(logging.DEBUG if args.verbose else logging.INFO)
 
     base_url = os.environ.get('OPENAI_BASE_URL')
     model = os.environ.get('OPENAI_MODEL', 'gpt-4o-mini')
@@ -153,20 +194,27 @@ async def main() -> int:
             'uv run python scripts/selfcheck.py',
         )
         return 2
-    # 파일 하나당 child 하나를 띄우므로 실수로 유료 엔드포인트에 나가면 비싸다.
-    # base_url이 없으면 상용 OpenAI다 — 명시적으로 --yes를 받는다.
+    # 파일 하나당 run 하나를 띄우므로 실수로 유료 엔드포인트에 나가면 비싸다.
     print(f'endpoint: {base_url or "https://api.openai.com/v1 (유료)"}  model: {model}')
-    if not base_url and '--yes' not in sys.argv:
+    if not base_url and not args.yes:
         print(
             '상용 OpenAI로 나간다. 의도한 것이면 --yes 를 붙여라 '
             '(로컬 엔드포인트는 OPENAI_BASE_URL 지정).',
         )
         return 2
 
-    code = {PLANTED_PATH: PLANTED_SOURCE} if '--planted' in sys.argv else sources()
-    if '--limit' in sys.argv:
-        limit = int(sys.argv[sys.argv.index('--limit') + 1])
-        code = dict(list(code.items())[:limit])
+    if args.planted:
+        code, rules = {PLANTED_PATH: PLANTED_SOURCE}, rules_text(SELF / 'CLAUDE.md')
+    else:
+        repo = args.repo.expanduser().resolve()
+        rules_path = find_rules(repo, args.rules)
+        code, rules = sources(repo), rules_text(rules_path)
+        print(f'repo: {repo}\nrules: {rules_path} ({len(rules):,} chars)')
+    if args.limit:
+        code = dict(list(code.items())[:args.limit])
+    if not code:
+        print('검사할 .py 파일이 없다.')
+        return 2
     print(f'검사 대상: {len(code)}개 파일, {sum(len(v) for v in code.values()):,} chars\n')
 
     reporter = ReportViolationTool()
@@ -179,7 +227,7 @@ async def main() -> int:
         ),
         strategy=ReActStrategy(),
         tools=[reporter],
-        instructions=AUDIT_INSTRUCTIONS.format(invariants=invariants()),
+        instructions=AUDIT_INSTRUCTIONS.format(rules=rules),
         # 파일 하나에 tool 호출 몇 번이면 끝난다 — 루프가 도는 건 이상 신호다.
         config=RuntimeConfig(max_iterations=8, timeout=180),
     )
@@ -191,13 +239,13 @@ async def main() -> int:
             status, used, _ = await audit_file(agent, path, source)
         except Exception as exc:  # 한 파일이 죽어도 감사 전체를 멈추지 않는다
             failures.append((path, repr(exc)))
-            print(f'  [{index:2}/{len(code)}] {path:42} ✗ {type(exc).__name__}')
+            print(f'  [{index:3}/{len(code)}] {path:52} ✗ {type(exc).__name__}')
             continue
         tokens += used
         found = len(reporter.found) - before
         mark = '✗' if status != 'completed' else ('!' if found else '·')
         print(
-            f'  [{index:2}/{len(code)}] {path:42} {mark} {status}'
+            f'  [{index:3}/{len(code)}] {path:52} {mark} {status}'
             + (f'  위반 {found}건' if found else ''),
         )
         if status != 'completed':
@@ -214,7 +262,7 @@ async def main() -> int:
         for path, why in failures:
             print(f'  {path}: {why}')
     print(f'\n총 {tokens:,} tokens')
-    if '--planted' in sys.argv:
+    if args.planted:
         ok = bool(reporter.found)
         print('심어둔 위반을 ' + ('잡았다 — 감사기에 신호가 있다.' if ok else '놓쳤다 — 이 모델로는 감사 결과를 믿을 수 없다.'))
         return 0 if ok else 1
