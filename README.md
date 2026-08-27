@@ -184,11 +184,15 @@ Python 3.12 + [uv](https://docs.astral.sh/uv/).
 
 ```bash
 make install            # uv sync
-make test               # 단위 테스트 — 외부 의존 없음
+make test               # 단위 테스트 — 외부 의존 0, 네트워크로 나가지 않는다
 make lint               # pre-commit 전체
 make check              # lint + test (커밋 전)
 make test-integration   # 실제 Redis + 멀티프로세스 (docker 필요)
+make test-providers     # 실제 엔드포인트 — base_url이 없으면 유료 API로 나간다
 make help               # 전체 명령
 ```
+
+통합 테스트는 `integration` 마커로 기본 실행에서 빠져 있다. `make test`는 API 키가
+환경에 있어도 밖으로 나가지 않는다 — 전부 돌리려면 `uv run pytest -m integration`.
 
 브랜치 전략과 코드 스타일은 [기여 가이드](docs/CONTRIBUTING.md) 참조.

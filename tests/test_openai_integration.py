@@ -22,10 +22,14 @@ from strata import OpenAIProvider
 from strata import ReActStrategy
 from strata import Tool
 
-pytestmark = pytest.mark.skipif(
-    not (os.environ.get('OPENAI_API_KEY') or os.environ.get('OPENAI_BASE_URL')),
-    reason='OPENAI_API_KEY / OPENAI_BASE_URL 없음 — 통합 테스트 건너뜀',
-)
+pytestmark = [
+    # 실제 API를 호출한다 — base_url이 없으면 유료다. 기본 pytest 실행에서 제외된다.
+    pytest.mark.integration,
+    pytest.mark.skipif(
+        not (os.environ.get('OPENAI_API_KEY') or os.environ.get('OPENAI_BASE_URL')),
+        reason='OPENAI_API_KEY / OPENAI_BASE_URL 없음 — 통합 테스트 건너뜀',
+    ),
+]
 
 
 def make_provider(**kwargs):
