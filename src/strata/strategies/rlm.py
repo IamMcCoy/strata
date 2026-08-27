@@ -63,6 +63,10 @@ class RLMStrategy(ReActStrategy):
     registry에 'python' tool이 이미 있으면(샌드박스 구현 등) 그것을 쓴다(default_tools 규칙).
     """
 
+    description = (
+        'Process an input too large to read in one context window: slice it in a Python REPL '
+        'and delegate the pieces to sub-agents.'
+    )
     default_tools = (PythonTool(),)
     prompt = RLM_PROMPT
 

@@ -36,6 +36,8 @@ from strata.strategies.reflection import REFLECTION_CRITIC_PROMPT
 from strata.strategies.reflection import ReflectionStrategy
 from strata.strategies.rlm import RLM_PROMPT
 from strata.strategies.rlm import RLMStrategy
+from strata.strategies.router import ROUTER_PROMPT
+from strata.strategies.router import RouterStrategy
 from strata.tools.base import Tool
 from strata.tools.base import ToolEnv
 from strata.tools.memory import MemoryTool
@@ -69,11 +71,13 @@ __all__ = [
     'REACT_PROMPT',
     'RECURSIVE_PROMPT',
     'REFLECTION_CRITIC_PROMPT',
+    'ROUTER_PROMPT',
     'RLMStrategy',
     'RLM_PROMPT',
     'ReActStrategy',
     'RecursiveStrategy',
     'ReflectionStrategy',
+    'RouterStrategy',
     'RedisMemory',
     'Runtime',
     'RuntimeConfig',

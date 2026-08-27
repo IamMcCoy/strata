@@ -149,6 +149,9 @@ Recursive
   (`tests/test_reflection.py::test_children_run_the_worker_strategy_not_reflection`).
 - `SpawnAgentTool`에는 `strategy`를 노출하지 않는다 — 모델이 전략을 고르려면 문자열 → 클래스
   레지스트리가 필요해지고, 소비자 없이 Phase 9를 앞당긴다. 전략 조합은 코드가 정한다.
+- 이어서 `RouterStrategy` — 과제에 맞는 전략을 고르고 **같은 Context에서** 실행한다
+  (child로 띄우면 멀티턴이 깨진다). 결정적 규칙이 모델보다 먼저이고, 분류는 enum tool call
+  1회다 (`tests/test_router.py`, `examples/router.py`).
 
 ## Phase 9 — Plugin Architecture
 

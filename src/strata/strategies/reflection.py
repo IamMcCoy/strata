@@ -78,6 +78,11 @@ class ReflectionStrategy(Strategy):
     실질 상한은 max_children(child 수 = 1 + rounds*2)이고, 초과분은 계약으로 돌아와 루프를 끝낸다.
     """
 
+    description = (
+        'Draft an answer, have it critiqued by a separate agent, and revise — for tasks where '
+        'output quality matters more than speed.'
+    )
+
     def __init__(
         self,
         *,

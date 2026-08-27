@@ -52,6 +52,8 @@ class ReActStrategy(Strategy):
     하위 전략(Recursive, RLM)은 default_tools로 tool을 추가하고 prompt/environment로 지시를 덧붙인다.
     """
 
+    description = 'Solve the task directly by calling tools in a loop. The general-purpose default.'
+
     # 전략이 기본 제공하는 tool. registry에 같은 이름이 있으면 registry가 이긴다 — 사용자 교체점(샌드박스 python 등)
     default_tools: tuple[Tool, ...] = ()
     # 패턴 지시(고정 텍스트). 하위 전략이 교체하고 사용자가 prompt= 인자로 덮어쓴다. ''이면 생략.

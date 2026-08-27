@@ -27,6 +27,10 @@ class Strategy(ABC):
     Provider/Tool/Memory/Child Agent에는 runtime의 primitive를 통해서만 접근한다.
     """
 
+    # "언제 나를 쓰나" 한 줄. Tool.description과 대칭이며 RouterStrategy가 분류 프롬프트를 만들 때 모은다.
+    # 비어 있으면 라우터가 클래스 이름으로 대신한다 — 커스텀 전략이 이걸 몰라도 라우팅에 낄 수 있다.
+    description: str = ''
+
     # 이 전략이 제안하는 실행 한도(RuntimeConfig의 필드 이름). 강제는 여전히 Runtime이 하고,
     # 사용자가 RuntimeConfig에 명시한 값이 이긴다 (ADR-0014). 클래스 기본값은 읽기 전용 —
     # super().__init__을 부르지 않는 서브클래스가 공유 dict를 건드리지 못하게.

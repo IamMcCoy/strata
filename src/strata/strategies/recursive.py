@@ -40,5 +40,9 @@ class RecursiveStrategy(ReActStrategy):
     budget_exceeded 관찰을 받고 스스로 답해야 한다.
     """
 
+    description = (
+        'Break the task into a few independent sub-problems, each solved by a child agent '
+        'that starts from a fresh context.'
+    )
     default_tools = (SpawnAgentTool(),)
     prompt = RECURSIVE_PROMPT
