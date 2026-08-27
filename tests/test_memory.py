@@ -191,3 +191,46 @@ if __name__ == '__main__':
     test_redis_shares_across_workers()
     test_agent_works_with_any_implementation()
     print('memory ok')
+
+
+def ranked(contents, query, limit=10):
+    memory = InMemory()
+    for content in contents:
+        asyncio.run(memory.store(MemoryItem(content=content)))
+    return [hit.content for hit in asyncio.run(memory.retrieve(query, limit=limit))]
+
+
+def test_ranking_does_not_collapse_into_insertion_order():
+    """회귀: 단순 겹침은 점수 상한이 질의 단어 수(여기선 3)라 동점이 대량 발생하고,
+    안정 정렬이 그것을 '가장 먼저 저장된 것'으로 잘랐다 — 더 관련 있는 항목이 나중에
+    저장되면 영원히 묻혔다. 항목 10건에서도 나타난다."""
+    filler = ' 그밖에 이런저런 잡담과 무관한 문장이 길게 이어진다' * 3
+    contents = [f'결제 관련 작업 {i}{filler}' for i in range(10)]
+    contents.append('결제 관련 작업 결제 관련 작업')  # 마지막에 저장된, 짧고 집중된 항목
+    top = ranked(contents, '결제 관련 작업', limit=3)
+    assert top[0] == '결제 관련 작업 결제 관련 작업'
+
+
+def test_frequency_beats_a_single_mention():
+    """`in`은 bool이라 한 번 나오나 열 번 나오나 같은 점수였다."""
+    top = ranked(['uv 이야기', 'uv uv uv 로 uv 를 쓴다'], 'uv')
+    assert top[0] == 'uv uv uv 로 uv 를 쓴다'
+
+
+def test_rare_word_outweighs_a_common_one():
+    """흔한 단어('작업')와 희소한 단어('롤백')가 같은 1점이면 관련 없는 항목이 올라온다."""
+    contents = [f'일상 작업 기록 {i}' for i in range(8)] + ['롤백 절차 메모']
+    top = ranked(contents, '롤백 작업')
+    assert top[0] == '롤백 절차 메모'
+
+
+def test_shorter_item_wins_on_equal_evidence():
+    """길이 정규화 — 긴 항목이 우연히 히트할 확률만으로 이기면 안 된다."""
+    # 긴 쪽을 먼저 저장한다 — 그래야 옛 점수(동점 → 삽입 순서)로는 긴 쪽이 이긴다
+    top = ranked(['uv ' + '무관한 잡담 ' * 40, 'uv 설치'], 'uv')
+    assert top[0] == 'uv 설치'
+
+
+def test_items_without_any_query_word_are_dropped():
+    """계약은 그대로 — 하나도 안 걸리는 항목은 결과에 없다."""
+    assert ranked(['커피를 좋아한다', 'uv로 패키지를 설치한다'], 'uv') == ['uv로 패키지를 설치한다']
