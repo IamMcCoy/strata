@@ -23,3 +23,6 @@ build/
 # OS
 .DS_Store
 Thumbs.db
+
+# make docs 생성물 — 원본은 코드의 docstring이다
+docs/api/

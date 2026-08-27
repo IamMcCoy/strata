@@ -1,5 +1,5 @@
 # Strata — 개발 명령. 런타임 의존성은 0개이므로 여기 있는 건 전부 개발/검증용이다.
-.PHONY: help install test lint check redis-up redis-down redis-logs test-integration test-providers clean
+.PHONY: help install test lint check docs redis-up redis-down redis-logs test-integration test-providers clean
 
 # docker-compose.yml과 tests/test_memory_integration.py가 함께 읽는다.
 # 주석을 값 뒤에 붙이면 공백까지 값에 들어간다 — 반드시 앞줄에.
@@ -19,6 +19,12 @@ lint:  ## lint/포맷/타입 검사 전체
 	uv run pre-commit run --all-files
 
 check: lint test  ## 커밋 전 검사 전체
+
+# API 레퍼런스는 손으로 쓰지 않는다 — 파라미터가 바뀌면 문서가 거짓말이 된다.
+# 손으로 쓰는 것은 docs/guide/ 뿐이고, 여기는 코드의 docstring에서 뽑는다.
+docs:  ## API 레퍼런스 생성 → docs/api/index.html
+	uv run pdoc strata -o docs/api --no-search --docformat markdown
+	@echo '→ docs/api/index.html'
 
 # --- Redis ---------------------------------------------------------------
 # SQLite에는 대응 target이 없다 — 파일 하나라 올릴 서버가 없다 (그게 SQLiteMemory를 고른 이유다).
