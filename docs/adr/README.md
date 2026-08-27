@@ -20,6 +20,7 @@
 | [0011](0011-run-id-and-two-kinds-of-cancellation.md) | run_id는 코어가 발급하고 외부 id를 받지 않는다 — 취소는 하드/협조적 두 종류 | Accepted |
 | [0012](0012-streaming-as-a-side-channel.md) | 스트리밍은 콜백(부수 채널)이지 반환 계약이 아니다 — 재시도는 SDK에 맡긴다 | Accepted |
 | [0013](0013-provider-errors-become-a-result-contract.md) | 인프라 오류는 결과 계약으로, 프로그래밍 오류는 그대로 — 번역은 Provider가 한다 | Accepted |
+| [0014](0014-strategy-proposes-limits.md) | 전략이 한도를 제안하고 Runtime이 강제한다 — merge는 Agent.run 한 줄 | Accepted |
 
 ## 템플릿
 
