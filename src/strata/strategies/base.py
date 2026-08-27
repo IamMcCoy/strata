@@ -36,11 +36,19 @@ class Strategy(ABC):
     # super().__init__을 부르지 않는 서브클래스가 공유 dict를 건드리지 못하게.
     limits: Mapping[str, Any] = MappingProxyType({})
 
-    def __init__(self, **limits: Any):
-        """전략별 한도를 생성 시점에 받는다 — `ReActStrategy(max_iterations=10)`.
+    def __init__(self, *, description: str | None = None, **limits: Any):
+        """덮어쓰기는 명시 인자로 받는다 (ADR-0009) — 서브클래싱을 강요하지 않는다.
 
-        이름은 RuntimeConfig의 필드여야 한다(오타는 여기서 TypeError). None은 무시한다.
+        - description: 라우팅 카탈로그에 실릴 한 줄. 도메인 용어로 다시 쓰면 라우팅 정확도가
+          올라간다 — 이 설계에서 가장 값싼 튜닝 손잡이다.
+          `RouterStrategy({'lookup': ReActStrategy(description='단순 조회·계산')}, ...)`
+        - limits: 전략별 실행 한도. 이름은 RuntimeConfig의 필드여야 한다(오타는 여기서
+          TypeError). None은 무시한다 — `ReActStrategy(max_iterations=10)`.
+
+        서브클래스가 `**limits`만 super로 넘겨도 description이 따라온다(키워드로 잡힌다).
         """
+        if description is not None:
+            self.description = description
         if limits:
             self.limits = validate_limits(limits)
 

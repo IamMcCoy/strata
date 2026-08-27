@@ -62,6 +62,9 @@ Agent(provider=p, strategy=ReflectionStrategy(rounds=4),
 | Recursive | + `max_depth`, `max_children` | (없음) | (상속) |
 | RLM | + `max_depth`, `max_children` | (없음) | (상속) |
 | Reflection | **`max_children`** (아래 참조) | `max_children ≥ 1 + rounds*2` (하한, 올리기만) | `rounds`, `worker`, `critic_prompt` |
+| Router | (고른 전략의 것을 따른다) | (없음) | `routes`, `default`, `context_route`, `prompt` |
+
+모든 전략이 공통으로 `description=`을 받는다 — `Strategy.__init__`에 있어 커스텀 전략도 공짜로 얻는다.
 
 한도를 Strategy로 **옮기지는** 않는다. `max_iterations`는 "ReAct의 루프 상한"이 아니라
 **노드당 `generate` 호출 상한**이고, 강제를 전략으로 옮기면 Custom Strategy가 `runtime.generate`를
@@ -387,6 +390,17 @@ RouterStrategy(
 - **각 Strategy는 `description`("언제 나를 쓰나" 한 줄)을 갖는다** — `Tool.description`과 대칭.
   라우터가 routes의 description을 모아 분류 프롬프트를 만든다. 비어 있으면 클래스 이름으로
   대신하므로 **커스텀 전략이 이걸 몰라도 라우팅에 낀다**.
+  덮어쓰기는 서브클래싱이 아니라 **명시 인자**다(ADR-0009) — `prompt=`·`model_params=`와 같은 자리:
+
+  ```python
+  RouterStrategy({
+      'lookup': ReActStrategy(description='단순 조회·계산. 사내 API로 바로 답할 수 있는 질문.'),
+      'bulk':   RLMStrategy(description='대용량 로그·문서 일괄 처리.'),
+  }, default='lookup')
+  ```
+
+  기본 설명은 영어 일반론이라 도메인에 맞지 않는다. **도메인 용어로 다시 쓰는 것이 이 설계에서
+  가장 값싼 튜닝 손잡이다** — 모델·프롬프트를 건드리지 않고 라우팅 정확도를 올린다.
 - **분류는 free-text가 아니라 tool call** — `route(strategy: enum[routes])`를 광고해 `generate`
   1회, `tool_calls[0].arguments['strategy']`를 읽는다. enum이라 고를 수 있는 값이 스키마로
   고정된다("아마 Reflection이 좋을 것 같은데 ReAct도…" 같은 답이 불가능해진다).
