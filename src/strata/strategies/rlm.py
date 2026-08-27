@@ -11,7 +11,9 @@ RLM_PROMPT = REACT_PROMPT + """
 Large inputs are NOT in this conversation. They are stored as Python variables that you can only \
 inspect and process through the `python` tool. The REPL is persistent: variables, imports, and \
 functions you define survive between calls. Never reassign `context` itself — derive new variables from it. \
-The variables that exist right now are listed at the end of this message and refreshed on every turn.
+The end of this message lists the variables that exist right now (refreshed every turn) and the \
+helpers that are always injected — `llm_query` is one of them, so it is available even though it \
+is not a variable.
 
 ## Inspecting without flooding the window
 - Start by measuring whatever is listed below (if `context` is there: `len(context)`, `type(context)`, \
@@ -65,5 +67,14 @@ class RLMStrategy(ReActStrategy):
     prompt = RLM_PROMPT
 
     def environment(self, context: Context) -> str:
-        """현재 변수 목록 — 모델이 REPL에서 변수를 만들면 다음 호출의 system에 나타난다."""
-        return '## Current variables\n' + _describe_variables(context.variables)
+        """현재 변수 목록 + 항상 주입되는 helper — 모델이 REPL에서 만든 변수는 다음 호출의 system에 나타난다.
+
+        helper를 따로 적는 이유: 변수 목록은 callable을 숨기므로 `llm_query`가 거기 절대 안 나타난다.
+        그런데 프롬프트는 이 목록을 권위 있는 것으로 말한다 — 약한 모델은 목록을 믿고
+        "llm_query는 없다"고 결론내고 재귀를 포기한다(실측: Gemma4-12B). 두 출처의 모순을 없앤다.
+        """
+        return (
+            '## Current variables\n' + _describe_variables(context.variables)
+            + '\n\n## Always injected into the REPL (not variables)\n'
+            + '- llm_query(prompt: str, context=None) -> str'
+        )
