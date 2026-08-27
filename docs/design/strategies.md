@@ -28,11 +28,37 @@ runtime.execution
 
 `runtime.provider`를 직접 호출하지 않는다 — 한도·집계·이벤트가 `generate`에 걸려 있다.
 
-초기 구현: `ReActStrategy`, `RecursiveStrategy`, `RLMStrategy`.
-향후: `ReflectionStrategy`, `PlanExecuteStrategy`, `RouterStrategy`,
+구현: `ReActStrategy`, `RecursiveStrategy`, `RLMStrategy`, `ReflectionStrategy`.
+향후: `PlanExecuteStrategy`, `RouterStrategy`,
 `DebateStrategy`, `SelfConsistencyStrategy`, `MultiAgentStrategy`, `CustomStrategy`.
 각 패턴의 배경과 Strata primitive 매핑은
 [agentic-patterns-background.md](../overview/agentic-patterns-background.md) 참조.
+
+## 파라미터 — 한도(limit)와 knob
+
+전략에 붙는 값은 두 종류이고 소유자가 다르다. 섞으면 안전 속성이 깨진다.
+
+|  | **한도(limit)** | **패턴 knob** |
+| --- | --- | --- |
+| 목적 | 폭주·비용 폭발 방지 | 그 패턴의 동작 정의 |
+| 소유 | `RuntimeConfig` — Runtime이 강제 | `Strategy.__init__` 인자 |
+| 초과하면 | `budget_exceeded` 계약 반환 | "초과"라는 개념이 없다 |
+| 전략이 몰라도 | **걸린다** | 해당 없음 |
+
+| Strategy | 실질적으로 걸리는 한도 | knob |
+| --- | --- | --- |
+| ReAct | `max_iterations`, `token_budget`, `timeout` | `prompt`, `model_params` |
+| Recursive | + `max_depth`, `max_children` | (상속) |
+| RLM | + `max_depth`, `max_children` | (상속) |
+| Reflection | **`max_children`** (아래 참조) | `rounds`, `worker`, `critic_prompt` |
+
+`max_iterations`는 "ReAct의 루프 상한"이 아니라 **노드당 `generate` 호출 상한**이다.
+ReActStrategy로 옮기면 Custom Strategy가 `runtime.generate`를 무한히 부를 수 있게 되고,
+"한도를 몰라도 Runtime이 막아 준다"는 확장점의 안전 속성이 사라진다 — 이름이 특정 전략을
+연상시킬 뿐 소유권은 Runtime이 맞다.
+
+같은 이유로 `rounds`는 `RuntimeConfig`에 넣지 않는다. 2라운드를 도는 것은 폭주가 아니라
+Reflection의 정의이고, 넣는 순간 Reflection을 쓰지 않는 사용자도 보는 설정이 된다.
 
 ## 지시(instructions)와 Context
 
@@ -281,11 +307,46 @@ RLM은 **데이터 흐름**(거대 입력을 변수로 두고 코드로 조각�
 RLM child는 같은 RLMStrategy를 상속하므로 자기 조각에 대해 다시 `python`/`llm_query`를 쓸 수 있다 —
 즉 RLM ⊃ Recursive에 가깝고, Recursive는 "REPL 없이 가벼운 위임만 필요할 때"의 얇은 버전이다.
 
-## Reflection Strategy (Phase 7)
+## Reflection Strategy
 
 ```text
 Generate → Critique → Revision → Critique → Final
 ```
+
+**스스로 `generate`를 부르지 않는 첫 전략**이다. 초안·비판·수정을 전부 child로 띄우는
+오케스트레이터이므로, 비판자의 문맥 격리가 공짜로 따라온다 — child는 parent의 대화를 보지
+못한다는 기존 불변식이 그대로 "자기 초안에 물들지 않은 비판자"가 된다.
+
+```python
+class ReflectionStrategy(Strategy):
+    rounds: int = 2                  # 고정. 조기 종료 없음
+    worker: Strategy = ReActStrategy()   # 초안·수정 child의 전략
+    critic_prompt: str = REFLECTION_CRITIC_PROMPT
+```
+
+결정 사항:
+
+- **`spawn_agent(strategy=self.worker)`는 선택이 아니라 필수** — 생략하면 child가 parent의
+  전략(=ReflectionStrategy)을 상속해 `max_depth`까지 재귀한다
+  ([ADR-0006](../adr/0006-runtime-per-run.md)). Phase 8의 `spawn_agent(strategy=...)`가
+  죽은 유연성이 아니라 배관인 첫 사례.
+- **조기 종료를 두지 않는다** — 비판자에게 "이제 충분한가"를 묻는 순간 모델이 스스로
+  만족했는지 판단하게 되고, 그것을 막는 것이 이 패턴의 존재 이유다. 끄려면 `rounds=0`.
+- **초안은 `context=`가 아니라 task 문자열로 넘긴다** — `spawn_agent(context=...)`는
+  child의 `variables['context']`에 들어가고, 그것은 REPL(RLM)이 있어야 보인다.
+  worker가 ReAct면 조용히 보이지 않으므로 넘기지 않는다.
+- **비판자의 system은 사용자 지시 + `critic_prompt`** — 사용자가 "한국어로"를 걸었으면
+  비판 라운드에서도 유지되어야 한다.
+- **이 노드에는 `max_iterations`가 걸리지 않는다** — `generate`를 직접 부르지 않기 때문이다.
+  실질 상한은 `max_children`(child 수 = `1 + rounds*2`)이고, 초과분은 계약으로 돌아와
+  루프를 끝내며 지금까지의 최선을 답으로 삼는다.
+- **중간 초안은 `evidence`에, 최신 초안 하나만 `context.messages`에** — 취소·한도로 끊겨도
+  `last_assistant_text()`가 살리고, 멀티턴 transcript에는 중간 초안이 쌓이지 않는다.
+- **`SpawnAgentTool`에는 `strategy`를 노출하지 않는다** — 모델이 전략을 고르게 하려면
+  문자열 → 클래스 레지스트리가 필요해지고, 그것은 소비자 없이 Phase 9(Plugin)를 앞당긴다.
+  전략 조합은 코드가 정한다.
+
+검증: `tests/test_reflection.py`, `examples/reflection.py`.
 
 ## Router Strategy (Phase 8)
 
@@ -311,7 +372,7 @@ class RouterStrategy(Strategy):
 - **결정적 규칙이 모델보다 먼저** — `variables['context']`가 있으면 묻지 않고 RLM. 라우팅 실패는 전체 실패이므로
   `default`는 필수이고, 분류 호출은 싼 모델로 할 수 있다(`provider` 오버라이드).
 - **Runtime 변경 없음** — 라우터가 root, 선택된 전략이 child 노드가 되어 Execution Tree에 "왜 이 전략인가"가 남는다.
-  `spawn_agent(strategy=...)`의 첫 실전 사용처.
+  `spawn_agent(strategy=...)`를 쓰는 두 번째 사례(첫 사례는 Reflection).
 
 ## Strategy Composition (Phase 8)
 
@@ -324,7 +385,9 @@ Recursive
 ```
 
 이를 위해 Strategy를 enum이나 if/else가 아닌 독립적인 실행 abstraction으로 만든다.
-조합의 자연스러운 형태: `spawn_agent(strategy=...)`로 child의 strategy를 지정한다 — 이미 지원된다.
+조합의 자연스러운 형태: `spawn_agent(strategy=...)`로 child의 strategy를 지정한다.
+`ReflectionStrategy`가 이 인자의 첫 소비자이고, `ReflectionStrategy(worker=RecursiveStrategy())`
+처럼 worker를 갈아끼우면 위 조합이 그대로 성립한다 (`tests/test_reflection.py`).
 
 ## Custom Strategy
 
