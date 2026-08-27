@@ -70,6 +70,14 @@ system = `instructions` + `prompt` + 현재 상태로 조립한다. Tool은 `exe
 `RouterStrategy`는 과제에 맞는 전략을 고르고 그것이 끝까지 풀게 한다 — 거대 입력이 오면
 묻지 않고 RLM으로 가고(사실이지 판단이 아니다), 아니면 `route(strategy: enum)` tool call 1회로
 정한다. 고른 전략을 **같은 Context에서** 실행하므로 라우터를 씌워도 멀티턴이 깨지지 않는다.
+판단 근거는 각 전략의 `description`이고, 도메인 용어로 덮어쓰는 것이 가장 값싼 튜닝이다:
+
+```python
+RouterStrategy({
+    'lookup': ReActStrategy(description='단순 조회·계산. 사내 API로 바로 답할 수 있는 질문.'),
+    'bulk':   RLMStrategy(description='대용량 로그·문서 일괄 처리.'),
+}, default='lookup')
+```
 
 `ReflectionStrategy`는 초안·비판·수정을 전부 child로 띄우는 오케스트레이터라
 스스로 `generate`를 부르지 않는다 — child가 parent 대화를 못 본다는 불변식이 그대로

@@ -113,3 +113,12 @@ def test_reflection_rounds_four_now_completes():
     result = asyncio.run(agent.run('t'))
     assert result.metadata['rounds_completed'] == 4
     assert result.result == 'draft v5'
+
+
+def test_description_and_limits_are_both_constructor_arguments():
+    """둘 다 명시 인자로 받는다 — 오타는 생성 시점 TypeError (ADR-0009)."""
+    strategy = ReActStrategy(description='한 줄 설명', max_iterations=5)
+    assert strategy.description == '한 줄 설명'
+    assert strategy.limits == {'max_iterations': 5}
+    with pytest.raises(TypeError, match='descriptoin'):
+        ReActStrategy(descriptoin='오타')

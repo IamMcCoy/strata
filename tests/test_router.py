@@ -123,3 +123,36 @@ def test_routes_accept_the_real_strategies():
     )
     catalog = router.catalog()
     assert 'tools in a loop' in catalog and 'context window' in catalog
+
+
+def test_description_is_overridable_per_instance():
+    """서브클래싱 없이 생성자로 바꾼다 — 도메인 용어로 다시 쓰는 게 가장 값싼 튜닝이다 (ADR-0009)."""
+    router = RouterStrategy(
+        {
+            'lookup': ReActStrategy(description='단순 조회·계산. 사내 API로 바로 답할 수 있는 질문.'),
+            'bulk': RLMStrategy(description='대용량 로그·문서 일괄 처리.'),
+        },
+        default='lookup',
+    )
+    catalog = router.catalog()
+    assert '- lookup: 단순 조회·계산. 사내 API로 바로 답할 수 있는 질문.' in catalog
+    assert '- bulk: 대용량 로그·문서 일괄 처리.' in catalog
+    assert 'tools in a loop' not in catalog  # 기본 설명이 남아 있지 않다
+
+
+def test_overridden_description_reaches_the_model():
+    a = ReActStrategy(description='도메인 전용 설명')
+    result, provider = run([route('a')], {'a': Marker('a'), 'b': Marker('b')})
+    assert result.metadata['route'] == 'a'
+    router = RouterStrategy({'a': a}, default='a')
+    assert '도메인 전용 설명' in router.catalog()
+
+
+def test_router_description_is_overridable_too():
+    router = RouterStrategy({'a': Marker('a')}, default='a', description='우리 팀 라우터')
+    assert router.description == '우리 팀 라우터'
+
+
+def test_class_default_description_is_not_polluted():
+    ReActStrategy(description='일회성')
+    assert ReActStrategy().description.startswith('Solve the task directly')
