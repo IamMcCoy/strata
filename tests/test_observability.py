@@ -20,6 +20,7 @@ from strata import ModelResponse
 from strata import ReActStrategy
 from strata import SpawnAgentTool
 from strata import Strategy
+from strata import Tool
 
 
 def priced(text, tokens):
@@ -124,3 +125,36 @@ def test_cancel_is_not_swallowed_by_spawn_agent_tool():
 
 if __name__ == '__main__':
     print('pytest로 실행하세요 (caplog fixture 사용): uv run pytest tests/test_observability.py')
+
+
+class AddTool(Tool):
+    name = 'add'
+    description = 'Add two integers'
+    input_schema = {'type': 'object', 'properties': {'a': {'type': 'integer'}, 'b': {'type': 'integer'}}}
+
+    async def execute(self, env, **kwargs):
+        return kwargs['a'] + kwargs['b']
+
+
+def test_warns_when_a_tool_call_leaks_into_the_answer_text(caplog):
+    """모델이 tool call 형식을 못 지키면 벤더 문법이 텍스트로 샌다.
+
+    tool_calls가 비어 ReAct는 그것을 최종 답으로 보고 끝낸다 — 조용히 쓰레기가 정답이 된다.
+    동작은 바꾸지 않고(오탐 가능) 경고만 남는지 확인한다. 실측: vLLM + Gemma4-12B.
+    """
+    leaked = '<|tool_call>call:add{"a": 1, "b": 2}'
+    agent = Agent(provider=ScriptedProvider([final(leaked)]), strategy=ReActStrategy(), tools=[AddTool()])
+    with caplog.at_level(logging.WARNING, logger='strata'):
+        result = asyncio.run(agent.run('1 + 2'))
+
+    assert result.status == 'completed' and result.result == leaked  # 동작은 그대로
+    assert any('tool_call_may_have_leaked_as_text' in r.message for r in caplog.records)
+    assert any("['add']" in str(r.args) for r in caplog.records)
+
+
+def test_no_warning_when_the_answer_does_not_mention_a_tool(caplog):
+    """평범한 최종 답에는 경고가 붙지 않는다 — 매 run마다 뜨면 아무도 안 읽는다."""
+    agent = Agent(provider=ScriptedProvider([final('정답은 3입니다.')]), strategy=ReActStrategy(), tools=[AddTool()])
+    with caplog.at_level(logging.WARNING, logger='strata'):
+        asyncio.run(agent.run('1 + 2'))
+    assert not [r for r in caplog.records if 'leaked' in r.message]

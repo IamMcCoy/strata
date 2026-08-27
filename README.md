@@ -72,6 +72,13 @@ system = `instructions` + `prompt` + 현재 상태로 조립한다. Tool은 `exe
 "자기 초안에 물들지 않은 비판자"가 된다. 전략 조합은 `worker=`로 한다:
 `ReflectionStrategy(rounds=2, worker=RecursiveStrategy())`.
 
+> ⚠️ **`RLMStrategy`의 `PythonTool`은 샌드박스가 아니다.** 모델이 만든 코드가 이 프로세스
+> 권한으로 실행된다 — 파일·네트워크·환경변수 전부. **신뢰된 환경 전용**이다.
+> 최종 사용자 입력이 프롬프트에 닿는다면 같은 `name='python'`으로 격리 구현(컨테이너·원격 커널)을
+> 만들어 `tools=[...]`에 등록하라 — registry가 전략의 기본 tool을 이긴다.
+> 코어가 인프로세스 샌드박스를 만들지 않는 이유는
+> [ADR-0015](docs/adr/0015-no-in-process-sandbox.md).
+
 ## 주요 기능
 
 ### 스트리밍 — 콜백이지 두 번째 진입점이 아니다 ([ADR-0012](docs/adr/0012-streaming-as-a-side-channel.md))

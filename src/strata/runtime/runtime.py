@@ -35,6 +35,29 @@ class BudgetExceeded(Exception):
         self.limit = limit
 
 
+def _warn_if_tool_call_leaked_as_text(
+    run_id: str, context: Context, tools: list[Tool] | None, response: ModelResponse,
+) -> None:
+    """tool을 하나도 부르지 않았는데 답 본문이 광고된 tool 이름을 말하면 경고한다.
+
+    모델이 tool call 형식을 못 지키면 벤더 고유 문법(`<|tool_call|>…`)이 **텍스트로 샌다**.
+    그러면 `tool_calls`가 비어 ReAct 계열은 이것을 "최종 답"으로 보고 루프를 끝낸다 —
+    쓰레기가 정답이 되고, 아무 신호도 남지 않는다(실측: vLLM + Gemma4-12B).
+
+    벤더별 가짜 문법을 문자열 매칭하지 않는다 — 벤더마다 다르고 파서가 코어에 쌓인다.
+    대신 **우리가 아는 것**만 본다: 우리가 광고한 tool 이름. 오탐이 가능하므로
+    (모델이 "I used the add tool"이라고 설명할 수 있다) 동작은 바꾸지 않고 경고만 남긴다.
+    """
+    if response.tool_calls or not tools or not response.text:
+        return
+    mentioned = [tool.name for tool in tools if tool.name in response.text]
+    if mentioned:
+        logger.warning(
+            'run=%s exec=%s model.tool_call_may_have_leaked_as_text names=%s text=%.120s',
+            run_id, _exec_id(context), mentioned, response.text,
+        )
+
+
 def _exec_id(context) -> str | None:
     """로그 줄을 Execution Tree의 노드에 이어주는 값."""
     return context.metadata.get('execution_id') if context is not None else None
@@ -160,6 +183,7 @@ class Runtime:
             self.usage[key] += amount
             if node is not None:
                 node.usage[key] += amount
+        _warn_if_tool_call_leaked_as_text(self.run_id, context, tools, response)
         return response
 
     # ---- primitive 2: Tool 실행 ---------------------------------------------------
