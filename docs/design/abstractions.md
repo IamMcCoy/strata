@@ -122,7 +122,7 @@ Agent(provider=..., strategy=..., on_delta=lambda text, execution_id: queue.put_
 |---|---|---|
 | OpenAI | `OpenAIProvider(model=...)` | ✅ 스트리밍·tool 왕복까지 확인 |
 | Claude | `AnthropicProvider(model=...)` — 메시지 형식이 달라 별도 구현 | ❌ **미검증** (변환 단위 테스트만) |
-| vLLM | `OpenAIProvider(base_url='http://host:port/v1')` | ✅ 스트리밍·usage 확인 (주의사항 아래) |
+| vLLM | `OpenAIProvider(base_url='http://host:port/v1')` | ✅ 스트리밍·tool 왕복·usage 확인 (주의사항 아래) |
 | Ollama | `OpenAIProvider(base_url='http://localhost:11434/v1')` | ❌ **미검증** |
 | OpenRouter | `OpenAIProvider(base_url='https://openrouter.ai/api/v1')` | ❌ **미검증** |
 | Gemini | `GeminiProvider(model=...)` — 네이티브 SDK, 별도 구현 | ✅ 스트리밍·tool 왕복·usage 확인 |
@@ -138,13 +138,16 @@ redis.asyncio의 이벤트 루프 바인딩, 그리고 **Gemini 3.x의 `thought_
 
 ### vLLM 주의사항 (실측)
 
-`Gemma4-E2B-it` 기준으로 확인한 것:
+`Gemma4-E2B-it`·`Gemma4-12B-it` 기준으로 확인한 것:
 
 - **usage는 정상이다.** `stream_options: {include_usage: true}`를 받는다 —
   스트리밍에서도 `token_budget`이 동작한다.
-- **tool을 쓰려면 서버 플래그가 필요하다.** `--enable-auto-tool-choice`와
-  `--tool-call-parser` 없이 뜬 서버에 tool을 넘기면 400으로 거절한다.
-  코드 문제가 아니라 서버 기동 옵션이다.
+- **tool 왕복도 정상이다** (`Gemma4-12B-it`, 2026-08-27). 단 서버가
+  `--enable-auto-tool-choice`와 `--tool-call-parser`로 떠 있어야 한다 — 없으면 tool을
+  넘기는 순간 400으로 거절한다. 코드 문제가 아니라 서버 기동 옵션이다.
+  재현: `OPENAI_BASE_URL=<endpoint> OPENAI_MODEL=<model>
+  uv run pytest tests/test_openai_integration.py -q`
+  (모델이 암산으로 맞히는 것과 구분하려고 tool 호출 횟수를 센다).
 - 스트리밍 시 `httpcore2`의 async generator 정리 경고가 출력될 수 있다.
   **결과·usage는 정상**이며 같은 코드가 OpenAI에서는 조용하다 —
   vLLM의 SSE 종료 방식과 HTTP 스택 사이의 상호작용으로 보인다. 명시적 client close로도
