@@ -182,6 +182,7 @@ make redis-up && uv run python examples/worker.py   # Redis 큐 + 워커 2프로
 - [아키텍처](docs/architecture/architecture.md) · [설계](docs/design/abstractions.md)
 - [ADR](docs/adr/README.md) — 되돌리기 비싼 결정과 그 근거 12건
 - **[사용 가이드](docs/guide/)** — 조립·프로바이더·도구·기억·멀티턴·전략·한도
+- [변경 이력](CHANGELOG.md)
 - [로드맵](docs/roadmap.md) · [기여 가이드](docs/CONTRIBUTING.md)
 
 ## 상태
