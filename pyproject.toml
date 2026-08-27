@@ -1,0 +1,52 @@
+[project]
+name = "strata"  # PyPI 배포 시 결정된 배포명으로 변경 (import명 strata는 유지)
+version = "0.1.0"
+description = "A composable runtime for agentic systems"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = []
+
+[project.urls]
+Repository = "https://github.com/IamMcCoy/strata"
+
+# 코어는 의존성 0개다. Provider/Memory 구현이 쓰는 SDK는 extra로 고른다.
+# 여기 이름은 코드의 ImportError 안내문과 정확히 일치해야 한다 —
+# 존재하지 않는 extra는 조용히 무시돼서 "설치했는데 또 같은 에러"가 반복된다.
+# tests/test_packaging.py가 둘의 일치를 강제한다.
+[project.optional-dependencies]
+openai = ["openai>=1.50"]
+anthropic = ["anthropic>=0.40"]
+gemini = ["google-genai>=2.0"]
+redis = ["redis>=5"]
+# 다 필요한 사람을 위한 지름길. 기본값은 여전히 의존성 0개다.
+all = ["strata[openai,anthropic,gemini,redis]"]
+
+[dependency-groups]
+# redis는 dev 전용 — RedisMemory는 클라이언트를 주입받으므로 런타임 의존성이 아니다
+dev = [
+    "pytest",
+    "pre-commit",
+    "openai>=1.50",
+    "anthropic>=0.40",
+    "google-genai>=2.0",
+    "python-dotenv",
+    "redis>=5",
+    "pdoc>=16.0.0",
+]
+
+[tool.mypy]
+python_version = "3.12"
+files = ["src", "tests"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/strata"]
+
+[tool.pytest.ini_options]
+# 기본 `pytest`는 외부 의존이 0인 것만 돈다. 통합 테스트는 실제 Redis·멀티프로세스·
+# **유료 API**를 쓰므로 명시적으로 부를 때만 돈다 — `make test-integration`.
+markers = ['integration: 외부 서비스나 실제 API가 필요하다 (기본 실행에서 제외)']
+addopts = '-m "not integration"'

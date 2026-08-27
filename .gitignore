@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+dist/
+build/
+
+# 가상환경 / 시크릿
+.venv/
+.env
+
+# 도구 캐시
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+
+# IDE / 에디터
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# make docs 생성물 — 원본은 코드의 docstring이다
+docs/api/
