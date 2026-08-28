@@ -6,6 +6,15 @@
 **0.x 동안 minor 버전은 호환을 깰 수 있다.** `1.0`은 실사용자가 생기고 API가 몇 달간
 안정된 뒤에 붙인다 — "완성했다"가 아니라 "이제 못 바꾼다"는 선언이기 때문이다.
 
+## [0.1.1] — 2026-08-28
+
+공개 전환 준비 릴리스. 코드 동작 변경 없음.
+
+- Apache License 2.0 적용 — `LICENSE`·`NOTICE` 추가, pyproject에 `license` 필드
+- 기여 커밋에 DCO sign-off(`git commit -s`) 요구 (CONTRIBUTING)
+- 영어 문서 추가 — `README.en.md` + 사용 가이드 8편(`docs/guide/en/`)
+- `scripts/check_doc_links.py` — 마크다운 상대 링크 검사 스크립트
+
 ## [0.1.0] — 2026-08-27
 
 첫 릴리스. 조립(Provider·Tool·Memory 등록)만으로 실행 패턴을 쓸 수 있고, 어느 패턴이

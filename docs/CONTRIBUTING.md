@@ -113,6 +113,19 @@ develop ──●─────────●── merge     develop ──�
 
 예: `feat: ReActStrategy tool calling loop 구현`, `docs: ADR-0006 추가`.
 
+## DCO (Developer Certificate of Origin)
+
+모든 커밋에는 [DCO 1.1](https://developercertificate.org/) 동의를 뜻하는
+`Signed-off-by` 트레일러가 필요하다:
+
+```bash
+git commit -s -m "feat: ..."   # -s가 트레일러를 자동으로 붙인다
+```
+
+의미: "이 기여는 내가 작성했거나, 기여할 권리가 있는 코드이며, 이 저장소의
+라이선스(Apache 2.0)로 배포되는 것에 동의한다." CLA와 달리 서류 절차 없이
+커밋 서명만으로 성립한다. sign-off가 없는 PR은 머지하지 않는다.
+
 ## 코드 스타일
 
 도구가 강제하는 것이 기준이다 — **pre-commit이 통과하면 스타일 논쟁은 끝**.

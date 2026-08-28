@@ -2,6 +2,8 @@
 
 > A composable runtime for agentic systems.
 
+[English](README.en.md) | **한국어**
+
 **Strata**는 다양한 Agentic Pattern(ReAct, Recursive/RLM, Reflection, …)을
 하나의 Runtime 위에서 구현하고 조합할 수 있도록 하는 확장형 Agent Execution Framework다.
 Provider, Tool, Memory, Context, Strategy, Execution을 독립적인 primitive로 추상화하고,
@@ -210,3 +212,8 @@ make help               # 전체 명령
 환경에 있어도 밖으로 나가지 않는다 — 전부 돌리려면 `uv run pytest -m integration`.
 
 브랜치 전략과 코드 스타일은 [기여 가이드](docs/CONTRIBUTING.md) 참조.
+기여 커밋에는 [DCO](docs/CONTRIBUTING.md#dco-developer-certificate-of-origin) sign-off(`git commit -s`)가 필요하다.
+
+## 라이선스
+
+[Apache License 2.0](LICENSE)
