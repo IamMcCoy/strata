@@ -6,6 +6,21 @@
 **0.x 동안 minor 버전은 호환을 깰 수 있다.** `1.0`은 실사용자가 생기고 API가 몇 달간
 안정된 뒤에 붙인다 — "완성했다"가 아니라 "이제 못 바꾼다"는 선언이기 때문이다.
 
+## [0.1.2] — 2026-08-31
+
+### 추가
+
+- 성격별 import 경로 — `from strata.strategies import ReActStrategy`처럼 서브패키지에서
+  직접 가져올 수 있다 (`agent` / `providers` / `strategies` / `tools` / `memory` / `runtime`).
+  **기존 `from strata import ...`는 그대로 동작한다.** 두 경로가 어긋나지 않도록
+  `tests/test_packaging.py`가 강제한다.
+
+### 변경
+
+- `runtime` → `strategies` 단방향 의존으로 정리. 전략은 `Runtime`을 타입 힌트로만 쓰므로
+  `TYPE_CHECKING`으로 import한다 — 서브패키지 공개 전에는 빈 `__init__.py`가 가리고 있던
+  순환 의존이다. 공개 API 변화 없음.
+
 ## [0.1.1] — 2026-08-28
 
 공개 전환 준비 릴리스. 코드 동작 변경 없음.

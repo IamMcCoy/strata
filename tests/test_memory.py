@@ -8,13 +8,13 @@ from pathlib import Path
 from conftest import call
 from conftest import final
 from conftest import ScriptedProvider
-from strata import Agent
-from strata import InMemory
-from strata import MemoryItem
-from strata import MemoryTool
-from strata import ReActStrategy
-from strata import RedisMemory
-from strata import SQLiteMemory
+from strata.agent import Agent
+from strata.memory import InMemory
+from strata.memory import MemoryItem
+from strata.memory import RedisMemory
+from strata.memory import SQLiteMemory
+from strata.strategies import ReActStrategy
+from strata.tools import MemoryTool
 
 FACT = '사용자는 패키지 관리에 uv를 쓴다'
 

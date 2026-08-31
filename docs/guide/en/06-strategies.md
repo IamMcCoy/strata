@@ -162,14 +162,14 @@ You can also append to the exported constants — `REACT_PROMPT`, `RECURSIVE_PRO
 sees.**
 
 ```python
-from strata import REACT_PROMPT
+from strata.strategies import REACT_PROMPT
 ReActStrategy(prompt=REACT_PROMPT + '\n\nAlways answer in Korean.')
 ```
 
 ## Custom strategies
 
 ```python
-from strata import Strategy, AgentResult
+from strata.strategies import Strategy, AgentResult
 
 
 class TwoPass(Strategy):

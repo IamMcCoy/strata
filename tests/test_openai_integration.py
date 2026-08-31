@@ -17,10 +17,10 @@ import asyncio
 import os
 
 import pytest
-from strata import Agent
-from strata import OpenAIProvider
-from strata import ReActStrategy
-from strata import Tool
+from strata.agent import Agent
+from strata.providers import OpenAIProvider
+from strata.strategies import ReActStrategy
+from strata.tools import Tool
 
 pytestmark = [
     # 실제 API를 호출한다 — base_url이 없으면 유료다. 기본 pytest 실행에서 제외된다.

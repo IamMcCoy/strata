@@ -1,6 +1,6 @@
 [project]
 name = "strata"  # PyPI 배포 시 결정된 배포명으로 변경 (import명 strata는 유지)
-version = "0.1.1"
+version = "0.1.2"
 description = "A composable runtime for agentic systems"
 readme = "README.md"
 license = "Apache-2.0"

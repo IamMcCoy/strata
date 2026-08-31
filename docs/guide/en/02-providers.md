@@ -14,7 +14,7 @@ uv add 'strata[all]'
 ## Four providers + the compatible family
 
 ```python
-from strata import OpenAIProvider, AnthropicProvider, GeminiProvider
+from strata.providers import OpenAIProvider, AnthropicProvider, GeminiProvider
 
 OpenAIProvider(model='gpt-4o-mini')                       # uses the OPENAI_API_KEY environment variable
 AnthropicProvider(model='claude-sonnet-5', max_tokens=4096)
@@ -117,7 +117,7 @@ immediately — back off or move to another provider.
 ## Fallback
 
 ```python
-from strata import FallbackProvider
+from strata.providers import FallbackProvider
 
 provider = FallbackProvider([
     OpenAIProvider(model='gpt-4o-mini'),
@@ -136,7 +136,7 @@ burns money. If your input might be large, don't rely on fallback — do the tri
 ## Writing your own
 
 ```python
-from strata import Provider, ModelResponse, ToolCall
+from strata.providers import Provider, ModelResponse, ToolCall
 
 class MyProvider(Provider):
     async def generate(self, messages, tools=None, **kwargs):

@@ -9,9 +9,9 @@ from __future__ import annotations
 from pathlib import Path
 
 from dotenv import load_dotenv
-from strata import ModelResponse
-from strata import Provider
-from strata import ToolCall
+from strata.providers import ModelResponse
+from strata.providers import Provider
+from strata.providers import ToolCall
 
 load_dotenv(Path(__file__).parent.parent / '.env')
 

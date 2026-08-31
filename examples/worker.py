@@ -19,15 +19,15 @@ import os
 from uuid import uuid4
 
 import redis.asyncio as redis
-from strata import Agent
-from strata import MemoryTool
-from strata import ModelResponse
-from strata import OpenAIProvider
-from strata import Provider
-from strata import ReActStrategy
-from strata import RedisMemory
-from strata import Tool
-from strata import ToolCall
+from strata.agent import Agent
+from strata.memory import RedisMemory
+from strata.providers import ModelResponse
+from strata.providers import OpenAIProvider
+from strata.providers import Provider
+from strata.providers import ToolCall
+from strata.strategies import ReActStrategy
+from strata.tools import MemoryTool
+from strata.tools import Tool
 
 REDIS_URL = os.environ.get('REDIS_URL', f"redis://127.0.0.1:{os.environ.get('REDIS_PORT', '6379')}")
 QUEUE = 'strata:tasks'

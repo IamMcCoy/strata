@@ -12,7 +12,7 @@ uv add 'strata[all]'
 ## 네 가지 + 호환 계열
 
 ```python
-from strata import OpenAIProvider, AnthropicProvider, GeminiProvider
+from strata.providers import OpenAIProvider, AnthropicProvider, GeminiProvider
 
 OpenAIProvider(model='gpt-4o-mini')                       # OPENAI_API_KEY 환경변수 사용
 AnthropicProvider(model='claude-sonnet-5', max_tokens=4096)
@@ -113,7 +113,7 @@ if result.status == 'failed' and result.metadata.get('reason') == 'provider_erro
 ## 폴백
 
 ```python
-from strata import FallbackProvider
+from strata.providers import FallbackProvider
 
 provider = FallbackProvider([
     OpenAIProvider(model='gpt-4o-mini'),
@@ -131,7 +131,7 @@ provider = FallbackProvider([
 ## 직접 만들기
 
 ```python
-from strata import Provider, ModelResponse, ToolCall
+from strata.providers import Provider, ModelResponse, ToolCall
 
 class MyProvider(Provider):
     async def generate(self, messages, tools=None, **kwargs):

@@ -58,9 +58,36 @@ def test_the_all_extra_covers_every_other_extra():
     assert bundled == set(extras) - AGGREGATE, f"all이 덮지 못하는 extra가 있다: {set(extras) - AGGREGATE - bundled}"
 
 
+# 서브패키지 __init__.py가 재노출하는 이름들. 최상위 __all__과 손으로 맞추다 보면
+# 반드시 어긋난다 — 새 Strategy를 최상위에만 넣고 strategies/__init__.py를 빼먹는 식으로.
+SUBPACKAGES = ('agent', 'memory', 'providers', 'runtime', 'strategies', 'tools')
+# 서브패키지가 아닌 최상위 모듈에서 온 이름 (strata/conversation.py)
+TOP_LEVEL_ONLY = {'trim_history'}
+
+
+def test_subpackage_exports_match_top_level():
+    """`from strata.strategies import X`와 `from strata import X`는 같은 집합이어야 한다."""
+    import importlib
+
+    import strata
+
+    exported: set[str] = set()
+    for name in SUBPACKAGES:
+        sub = importlib.import_module(f'strata.{name}')
+        for symbol in sub.__all__:
+            assert hasattr(sub, symbol), f'strata.{name}.__all__에 있지만 실제로 없다: {symbol}'
+        exported |= set(sub.__all__)
+
+    top = set(strata.__all__) - TOP_LEVEL_ONLY
+    assert exported == top, (
+        f'서브패키지에만 있다: {exported - top} / 최상위에만 있다: {top - exported}'
+    )
+
+
 if __name__ == '__main__':
     test_every_advertised_extra_exists()
     test_core_has_no_runtime_dependencies()
     test_every_extra_is_advertised_somewhere()
     test_the_all_extra_covers_every_other_extra()
+    test_subpackage_exports_match_top_level()
     print('packaging ok')

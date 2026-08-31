@@ -11,13 +11,13 @@ import asyncio
 import pytest
 from conftest import final
 from conftest import ScriptedProvider
-from strata import Agent
-from strata import OpenAIProvider
-from strata import REACT_PROMPT
-from strata import ReActStrategy
-from strata import RECURSIVE_PROMPT
-from strata import RLM_PROMPT
-from strata import RLMStrategy
+from strata.agent import Agent
+from strata.providers import OpenAIProvider
+from strata.strategies import REACT_PROMPT
+from strata.strategies import ReActStrategy
+from strata.strategies import RECURSIVE_PROMPT
+from strata.strategies import RLM_PROMPT
+from strata.strategies import RLMStrategy
 
 
 def system_of(provider, agent, task='hi'):

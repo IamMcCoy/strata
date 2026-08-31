@@ -9,13 +9,13 @@ from __future__ import annotations
 
 import asyncio
 
-from strata import Agent
-from strata import InMemory
-from strata import MemoryTool
-from strata import ModelResponse
-from strata import Provider
-from strata import ReActStrategy
-from strata import ToolCall
+from strata.agent import Agent
+from strata.memory import InMemory
+from strata.providers import ModelResponse
+from strata.providers import Provider
+from strata.providers import ToolCall
+from strata.strategies import ReActStrategy
+from strata.tools import MemoryTool
 
 FACT = '사용자는 패키지 관리에 uv를 쓴다'
 

@@ -10,10 +10,10 @@ from __future__ import annotations
 
 import asyncio
 
-from strata import Agent
-from strata import ModelResponse
-from strata import Provider
-from strata import ReflectionStrategy
+from strata.agent import Agent
+from strata.providers import ModelResponse
+from strata.providers import Provider
+from strata.strategies import ReflectionStrategy
 
 DRAFTS = [
     '저희는 좋은 회사입니다. 최고의 기술로 최고의 서비스를 제공합니다.',

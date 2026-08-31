@@ -13,7 +13,10 @@ and the Runtime wires them together, executes them, and observes them.
 with the `openai`/`anthropic` versions your app has pinned.
 
 ```python
-from strata import Agent, OpenAIProvider, RLMStrategy, RuntimeConfig
+from strata.agent import Agent
+from strata.providers import OpenAIProvider
+from strata.runtime import RuntimeConfig
+from strata.strategies import RLMStrategy
 
 agent = Agent(
     provider=OpenAIProvider(model='gpt-4o-mini', model_params={'temperature': 0.3}),
@@ -167,6 +170,20 @@ uv add 'strata[openai] @ git+https://github.com/IamMcCoy/strata.git'
 ```
 
 Type hints included (PEP 561, `py.typed`).
+
+## Import Paths
+
+Names are grouped by role — `strata.agent` / `strata.providers` / `strata.strategies` /
+`strata.tools` / `strata.memory` / `strata.runtime`.
+
+```python
+from strata.agent import Agent
+from strata.providers import OpenAIProvider
+from strata.strategies import ReActStrategy
+```
+
+Everything is importable from the top level too (`from strata import Agent`). Same objects —
+`tests/test_packaging.py` enforces that the two paths never drift apart.
 
 ## Examples
 

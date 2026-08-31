@@ -5,11 +5,11 @@ import asyncio
 
 from conftest import final
 from conftest import TaskScriptedProvider
-from strata import Agent
-from strata import ModelResponse
-from strata import RecursiveStrategy
-from strata import RuntimeConfig
-from strata import ToolCall
+from strata.agent import Agent
+from strata.providers import ModelResponse
+from strata.providers import ToolCall
+from strata.runtime import RuntimeConfig
+from strata.strategies import RecursiveStrategy
 
 
 def spawn(*tasks):

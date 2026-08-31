@@ -150,14 +150,14 @@ ReActStrategy(prompt='')                      # 끄기
 `ROUTER_PROMPT`, `REFLECTION_CRITIC_PROMPT`. **내보낸 상수가 곧 모델이 보는 텍스트**다.
 
 ```python
-from strata import REACT_PROMPT
+from strata.strategies import REACT_PROMPT
 ReActStrategy(prompt=REACT_PROMPT + '\n\n답은 항상 한국어로.')
 ```
 
 ## 커스텀 전략
 
 ```python
-from strata import Strategy, AgentResult
+from strata.strategies import Strategy, AgentResult
 
 
 class TwoPass(Strategy):
