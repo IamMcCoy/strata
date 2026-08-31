@@ -10,7 +10,11 @@ if TYPE_CHECKING:
     # (없으면 strategies/__init__.py ↔ runtime 순환 import가 난다)
     from strata.strategies.base import AgentResult
 
-USAGE_KEYS = ('input_tokens', 'output_tokens', 'total_tokens')
+# reasoning_tokens는 **참고용 내역**이다 — 여기서 total에 더하지 않는다(벤더가 이미 반영했다.
+# OpenAI는 completion_tokens 안에, Gemini는 total_token_count 안에 넣어 준다). 이중 계상 금지.
+# 별도 키인 이유는 사고 모드가 실제로 켜졌는지의 유일한 벤더 중립 증거이기 때문이다:
+# OpenAI 순정은 사고 텍스트를 아예 안 주고 이 숫자만 준다.
+USAGE_KEYS = ('input_tokens', 'output_tokens', 'total_tokens', 'reasoning_tokens')
 
 
 @dataclass

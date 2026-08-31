@@ -15,6 +15,7 @@ from strata.agent import Agent
 from strata.memory import InMemory
 from strata.memory import MemoryItem
 from strata.providers import ModelResponse
+from strata.providers import ToolCall
 from strata.strategies import AgentResult
 from strata.strategies import ReActStrategy
 from strata.strategies import Strategy
@@ -158,3 +159,60 @@ def test_no_warning_when_the_answer_does_not_mention_a_tool(caplog):
     with caplog.at_level(logging.WARNING, logger='strata'):
         asyncio.run(agent.run('1 + 2'))
     assert not [r for r in caplog.records if 'leaked' in r.message]
+
+
+# --- 사고 과정(reasoning) --------------------------------------------------------
+
+def test_reasoning_is_collected_per_call_and_returned_in_metadata():
+    """사고는 generate 호출마다 따로 온다 — 합치면 어느 판단이 어느 턴 것인지 사라진다.
+
+    답이 아니라 진단용이므로 result가 아니라 metadata로 나간다. messages와 같은 자리·같은 규칙.
+    """
+    agent = Agent(
+        provider=ScriptedProvider([
+            ModelResponse(tool_calls=[ToolCall(name='add', arguments={'a': 1, 'b': 2})], reasoning='더해야겠다'),
+            ModelResponse(text='3', reasoning='3이 맞다'),
+        ]),
+        strategy=ReActStrategy(),
+        tools=[AddTool()],
+    )
+    result = asyncio.run(agent.run('1 + 2'))
+
+    assert result.result == '3', '사고가 답에 섞이면 안 된다'
+    assert result.metadata['reasoning'] == ['더해야겠다', '3이 맞다']
+
+
+def test_no_reasoning_key_when_thinking_is_off():
+    """빈 리스트를 넣으면 '껐다'와 '이 벤더는 안 준다'가 같아 보인다 — 키 자체를 두지 않는다."""
+    agent = Agent(provider=ScriptedProvider([final('3')]), strategy=ReActStrategy())
+    result = asyncio.run(agent.run('1 + 2'))
+    assert 'reasoning' not in result.metadata
+
+
+def test_child_agent_reasoning_rolls_up_to_the_root_only():
+    """Runtime은 run당 하나라 child의 사고도 root에 모인다 — child의 AgentResult에는 안 실린다.
+
+    최상위 필드였다면 재귀 깊이마다 사고가 parent context로 올라간다(불변식 4).
+    """
+    captured: list = []
+
+    class Parent(Strategy):
+        async def execute(self, context, runtime):
+            await runtime.generate(context)
+            child = await runtime.spawn_agent('sub', context, strategy=Child())
+            captured.append(child)
+            return AgentResult(result='done')
+
+    class Child(Strategy):
+        async def execute(self, context, runtime):
+            await runtime.generate(context)
+            return AgentResult(result='child')
+
+    provider = ScriptedProvider([
+        ModelResponse(text='p', reasoning='부모의 사고'),
+        ModelResponse(text='c', reasoning='자식의 사고'),
+    ])
+    result = asyncio.run(Agent(provider=provider, strategy=Parent()).run('t'))
+
+    assert 'reasoning' not in captured[0].metadata, 'child 계약에 사고를 실으면 context가 폭발한다'
+    assert result.metadata['reasoning'] == ['부모의 사고', '자식의 사고']

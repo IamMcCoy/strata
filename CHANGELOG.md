@@ -6,6 +6,39 @@
 **0.x 동안 minor 버전은 호환을 깰 수 있다.** `1.0`은 실사용자가 생기고 API가 몇 달간
 안정된 뒤에 붙인다 — "완성했다"가 아니라 "이제 못 바꾼다"는 선언이기 때문이다.
 
+## [Unreleased]
+
+### 추가
+
+- **사고 모드(thinking/reasoning) 관찰.** 파라미터를 넘겼다고 사고가 켜진 게 아니다 —
+  모르는 키는 서버가 조용히 무시한다. 켜졌는지 확인할 길이 없어 조용히 틀린 설정이 남던 것을 막는다.
+  - `ModelResponse.reasoning` — 사고 원문. Provider가 벤더별 필드에서 채운다
+    (OpenAI 호환 `reasoning_content`, Anthropic thinking 블록, Gemini thought part).
+  - `usage['reasoning_tokens']` — 사고 토큰 수. **OpenAI 순정은 사고 텍스트를 절대 주지 않으므로
+    이 숫자만이 증거다.** total에 더하지 않는다(벤더가 이미 반영했다).
+  - `AgentResult.metadata['reasoning']` — `generate` 호출 순서대로 쌓인 `list[str]`.
+    `metadata['messages']`와 같은 규칙으로 `Agent.run`에만 붙고 child의 결과에는 실리지 않는다.
+    사고가 없으면 키 자체가 없다.
+  - `examples/thinking.py` — 같은 모델을 껐다 켰다 비교한다. 절대값이 아니라 차이가 증거다.
+
+### 수정
+
+- **Gemini: 사고 요약이 답 텍스트에 섞여 나오던 것.** thought part도 `text`를 들고 오는데
+  `part.thought`로 가르지 않아 답에 합쳐지고 있었다.
+- **Gemini: AFC(automatic function calling) 비활성화.** SDK가 tool을 대신 실행하는 루프가
+  기본 켜짐이었다 — 루프의 주인은 Runtime이어야 한다(한도·취소·Execution Tree가 전부
+  `execute_tool`에 걸려 있다). 매 호출 찍히던 SDK 경고도 사라진다.
+- `AnthropicProvider`: thinking 블록을 버리지 않고 `reasoning`으로 꺼낸다.
+  **알려진 한계** — thinking + tool 조합은 이전 턴의 thinking 블록을 서명과 함께 돌려줘야 해서
+  아직 400이 난다(docstring에 명시).
+
+### 문서
+
+- `docs/guide/02-providers.md`(+ en): "사고 모드" 절 — 벤더별 켜는 법과 확인 방법.
+  vLLM은 `model_params={'extra_body': {'chat_template_kwargs': {'enable_thinking': ...}}}`.
+- `docs/design/abstractions.md`: 사고 과정을 어느 층까지 올리는지(6층 표)와 그 이유.
+- anthropic SDK 1.0에서 `temperature`·`top_p`·`top_k`가 `messages.create()`에서 사라진 것 반영.
+
 ## [0.1.2] — 2026-08-31
 
 ### 추가

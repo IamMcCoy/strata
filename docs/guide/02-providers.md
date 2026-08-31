@@ -67,7 +67,8 @@ ReActStrategy(model_params={'temperature': 0})                            # 이 
 ```
 
 코어는 이 dict를 해석하지 않고 SDK로 그대로 넘긴다. 지원 키가 벤더마다 다르기 때문이다
-(`top_k`는 Anthropic만, reasoning 모델은 `temperature`를 거부).
+(reasoning 모델은 `temperature`를 거부하고, anthropic SDK 1.0은 `temperature`·`top_p`·`top_k`를
+아예 받지 않는다 — `output_config={'effort': ...}`로 옮겼다).
 
 ## 스트리밍
 
@@ -95,6 +96,53 @@ on_delta=lambda text, execution_id: queue.put_nowait({'id': execution_id, 'text'
 ```python
 assert agent.runtime.usage['total_tokens'] > 0
 ```
+
+## 사고 모드 (thinking / reasoning)
+
+켜는 법은 벤더마다 다르고, 코어는 이 dict를 해석하지 않으므로 `model_params`에 그대로 넣는다:
+
+```python
+# vLLM — SDK의 create()에는 **kwargs가 없다. 벤더 확장은 extra_body로 넣는다.
+OpenAIProvider(
+    base_url='http://localhost:8000/v1', model='Gemma4-12B-it',
+    model_params={'extra_body': {'chat_template_kwargs': {'enable_thinking': False}}},
+)
+
+OpenAIProvider(model='o4-mini', model_params={'reasoning_effort': 'high'})
+AnthropicProvider(model='claude-sonnet-5', max_tokens=4096,
+                  model_params={'thinking': {'type': 'enabled', 'budget_tokens': 2048}})
+GeminiProvider(model='gemini-3.5-flash-lite', model_params={
+    'thinking_config': types.ThinkingConfig(include_thoughts=True, thinking_budget=1024)})
+```
+
+**파라미터를 넘겼다고 켜진 게 아니다** — 모르는 키는 서버가 조용히 무시한다. 확인은 두 곳:
+
+```python
+result = await agent.run(task)
+result.metadata.get('reasoning')   # ['사고1', '사고2', ...] 또는 None(꺼짐/미지원)
+agent.runtime.usage['reasoning_tokens']
+```
+
+`reasoning`은 `generate` 호출 순서대로 쌓인 리스트다 — ReAct가 tool을 세 번 쓰면 사고도 세 개다.
+재귀 실행에서는 child의 사고도 root에 모인다(`Runtime`이 run당 하나라서).
+
+벤더가 주는 것이 다르므로 **증거도 둘로 나뉜다** (실측):
+
+| Provider | `metadata['reasoning']` | `usage['reasoning_tokens']` |
+| --- | --- | --- |
+| vLLM / DeepSeek | 원문 | (있으면) |
+| Claude | 원문 | — |
+| Gemini | 요약본 | ✅ |
+| OpenAI (o-시리즈) | **없음** | ✅ |
+
+OpenAI 순정은 사고 텍스트를 **절대 주지 않는다**. `reasoning`이 `None`이어도 꺼진 게 아니라
+원래 안 주는 것이니 `reasoning_tokens`를 보라. 반대로 vLLM은 사고를 꺼도 빈 `<think></think>`
+때문에 `reasoning_tokens`가 2로 찍힌다 — **절대값이 아니라 껐다 켰을 때의 차이가 증거다**
+(실측: Gemma4-12B에서 2 vs 422). `examples/thinking.py`가 그 비교를 한 번에 돌린다.
+
+사고는 `on_delta`로 흐르지 않는다. 앱이 받는 조각은 답뿐이다 — 섞으면 사고가 답으로
+렌더되고 되돌릴 수 없기 때문이다. 대신 사고가 길수록 첫 조각까지 침묵이 길어진다는 대가가 있다.
+사고 원문은 실행이 끝난 뒤 `metadata['reasoning']`에서 한 번에 받는다.
 
 ## 오류
 
