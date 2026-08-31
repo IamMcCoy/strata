@@ -4,7 +4,7 @@ from __future__ import annotations
 import time
 import uuid
 
-from strata.runtime.ids import new_run_id
+from strata.runtime import new_run_id
 
 
 def test_is_a_valid_uuid_v7():

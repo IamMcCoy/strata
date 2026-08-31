@@ -14,7 +14,7 @@
 ## 세 가지 구현
 
 ```python
-from strata import InMemory, SQLiteMemory, RedisMemory
+from strata.memory import InMemory, SQLiteMemory, RedisMemory
 
 InMemory()                                          # 개발·테스트. 프로세스가 죽으면 사라진다
 SQLiteMemory('memory.db', namespace='user:42')      # 영속. stdlib sqlite3라 의존성 0
@@ -75,7 +75,7 @@ Agent(..., memory=mem, tools=[MemoryTool()])  # 읽고 쓰기
 ## 직접 넣고 빼기
 
 ```python
-from strata import MemoryItem
+from strata.memory import MemoryItem
 
 await mem.store(MemoryItem(content='이 사용자의 소속은 R&D센터'))
 await mem.store(MemoryItem(content='배포 승인자는 팀장', type='procedural'))
@@ -118,7 +118,7 @@ BM25로 점수를 매긴다 — 빈도, 문서 길이, 단어의 희소성을 �
 ## 직접 만들기
 
 ```python
-from strata import Memory, MemoryItem
+from strata.memory import Memory, MemoryItem
 from strata.memory.base import rank        # 점수 함수를 공유하면 결과가 일관된다
 
 class MyMemory(Memory):

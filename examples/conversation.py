@@ -9,13 +9,13 @@ from __future__ import annotations
 
 import asyncio
 
-from strata import Agent
-from strata import InMemory
-from strata import MemoryTool
-from strata import ModelResponse
-from strata import Provider
-from strata import ReActStrategy
-from strata import ToolCall
+from strata.agent import Agent
+from strata.memory import InMemory
+from strata.providers import ModelResponse
+from strata.providers import Provider
+from strata.providers import ToolCall
+from strata.strategies import ReActStrategy
+from strata.tools import MemoryTool
 
 # 남길 가치가 있는 건 "무슨 말을 했나"가 아니라 "앞으로 어떻게 답해야 하나"다.
 FACT = '사용자는 서울에 살아서 날씨 질문은 서울 기준으로 답한다'

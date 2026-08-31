@@ -3,11 +3,11 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from strata import ToolCall
+from strata.providers import ToolCall
 from strata.providers.openai import _to_model_response
 from strata.providers.openai import _to_openai_messages
 from strata.providers.openai import _to_openai_tools
-from strata.tools.base import Tool
+from strata.tools import Tool
 
 
 class AddTool(Tool):

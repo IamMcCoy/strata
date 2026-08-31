@@ -6,11 +6,11 @@ import asyncio
 from conftest import call
 from conftest import final
 from conftest import TaskScriptedProvider
-from strata import Agent
-from strata import PythonTool
-from strata import RLMStrategy
-from strata import RuntimeConfig
-from strata import Tool
+from strata.agent import Agent
+from strata.runtime import RuntimeConfig
+from strata.strategies import RLMStrategy
+from strata.tools import PythonTool
+from strata.tools import Tool
 
 
 def py(code):

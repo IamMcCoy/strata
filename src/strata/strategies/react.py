@@ -5,12 +5,15 @@ from collections.abc import Mapping
 from dataclasses import asdict
 from types import MappingProxyType
 from typing import Any
+from typing import TYPE_CHECKING
 
 from strata.agent.context import Context
-from strata.runtime.runtime import Runtime
 from strata.strategies.base import AgentResult
 from strata.strategies.base import Strategy
 from strata.tools.base import Tool
+
+if TYPE_CHECKING:
+    from strata.runtime.runtime import Runtime
 
 # 패턴 지시(harness prompt) — 고정 텍스트. 사용자 지시(Context.instructions) 뒤에 그대로 붙는다.
 # 덮어쓰기는 `ReActStrategy(prompt=...)`, 끄기는 `prompt=''`, 하위 전략은 이 문자열 위에 자기 규칙을 이어 붙인다.

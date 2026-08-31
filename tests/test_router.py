@@ -6,14 +6,14 @@ import asyncio
 import pytest
 from conftest import final
 from conftest import ScriptedProvider
-from strata import Agent
-from strata import AgentResult
-from strata import ModelResponse
-from strata import ReActStrategy
-from strata import RLMStrategy
-from strata import RouterStrategy
-from strata import Strategy
-from strata import ToolCall
+from strata.agent import Agent
+from strata.providers import ModelResponse
+from strata.providers import ToolCall
+from strata.strategies import AgentResult
+from strata.strategies import ReActStrategy
+from strata.strategies import RLMStrategy
+from strata.strategies import RouterStrategy
+from strata.strategies import Strategy
 
 
 class Marker(Strategy):

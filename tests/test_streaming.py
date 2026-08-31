@@ -9,13 +9,13 @@ import asyncio
 from types import SimpleNamespace
 
 from conftest import ScriptedProvider
-from strata import Agent
-from strata import AgentResult
-from strata import ModelResponse
-from strata import Provider
-from strata import ReActStrategy
-from strata import Strategy
+from strata.agent import Agent
+from strata.providers import ModelResponse
+from strata.providers import Provider
 from strata.providers.openai import _consume_stream
+from strata.strategies import AgentResult
+from strata.strategies import ReActStrategy
+from strata.strategies import Strategy
 
 
 def chunk(content=None, tool_call=None, usage=None):

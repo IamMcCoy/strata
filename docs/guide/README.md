@@ -35,11 +35,28 @@ uv add 'strata[openai]'     # 프로바이더는 extra: openai / anthropic / gem
 
 Python 3.12 이상.
 
+## import 경로
+
+이름은 성격별로 나뉜다 — `strata.agent` / `strata.providers` / `strata.strategies` /
+`strata.tools` / `strata.memory` / `strata.runtime`.
+
+```python
+from strata.agent import Agent
+from strata.providers import OpenAIProvider
+from strata.strategies import ReActStrategy
+```
+
+전부 최상위에서도 import된다(`from strata import Agent`). 같은 객체이고,
+두 경로가 어긋나지 않도록 `tests/test_packaging.py`가 강제한다.
+
 ## 5분
 
 ```python
 import asyncio
-from strata import Agent, OpenAIProvider, ReActStrategy, Tool
+from strata.agent import Agent
+from strata.providers import OpenAIProvider
+from strata.strategies import ReActStrategy
+from strata.tools import Tool
 
 
 class Add(Tool):

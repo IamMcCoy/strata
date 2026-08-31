@@ -38,6 +38,9 @@ scripts/check_install.sh             # wheel 빌드 → 깨끗한 venv 설치 �
    `runtime.generate()` / `runtime.execute_tool()` / `runtime.spawn_agent()` / `runtime.memory`.
    `runtime.provider.generate()` 직접 호출 금지(ADR-0008) — 한도·usage·이벤트가 `generate`에 걸려 있다.
    Strategy가 특정 Provider 구현을 import하면 설계 위반.
+   의존은 `runtime` → `strategies` **단방향**이다 — `runtime`은 `AgentResult`를 값으로 쓰고,
+   전략은 `Runtime`을 타입 힌트로만 쓴다. 새 전략에서 `Runtime`을 모듈 최상단에 import하면
+   서브패키지 `__init__.py` 때문에 순환한다. `if TYPE_CHECKING:` 안에 넣을 것.
 3. **Child Agent 생성은 반드시 `runtime.spawn_agent()` 경유** (ADR-0004).
    한도 검사(max_depth/max_children/token_budget)·Execution Tree 등록·이벤트 발행이
    전부 이 지점에서 일어난다. 한도 초과는 예외가 아니라 `status='budget_exceeded'` 반환.

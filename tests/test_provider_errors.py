@@ -10,15 +10,15 @@ import asyncio
 from conftest import call
 from conftest import final
 from conftest import ScriptedProvider
-from strata import Agent
-from strata import AgentResult
-from strata import ModelResponse
-from strata import Provider
-from strata import ProviderError
-from strata import ReActStrategy
-from strata import Strategy
-from strata import Tool
-from strata import ToolCall
+from strata.agent import Agent
+from strata.providers import ModelResponse
+from strata.providers import Provider
+from strata.providers import ProviderError
+from strata.providers import ToolCall
+from strata.strategies import AgentResult
+from strata.strategies import ReActStrategy
+from strata.strategies import Strategy
+from strata.tools import Tool
 
 
 class Echo(Tool):
@@ -148,14 +148,14 @@ class Works(Provider):
 
 
 def test_fallback_moves_to_the_next_provider():
-    from strata import FallbackProvider
+    from strata.providers import FallbackProvider
     agent = Agent(provider=FallbackProvider([AlwaysFails(), Works()]), strategy=ReActStrategy())
     result = asyncio.run(agent.run('작업'))
     assert result.status == 'completed' and result.result == '대체 답'
 
 
 def test_fallback_reports_every_failure_when_all_fail():
-    from strata import FallbackProvider
+    from strata.providers import FallbackProvider
     agent = Agent(provider=FallbackProvider([AlwaysFails(), AlwaysFails()]), strategy=ReActStrategy())
     result = asyncio.run(agent.run('작업'))
     assert result.status == 'failed'
@@ -164,7 +164,7 @@ def test_fallback_reports_every_failure_when_all_fail():
 
 def test_fallback_does_not_duplicate_already_streamed_text():
     """이미 흘러간 조각이 있으면 폴백하지 않는다 — 사용자 화면에 텍스트가 두 번 나오면 안 된다."""
-    from strata import FallbackProvider
+    from strata.providers import FallbackProvider
     seen: list[str] = []
     agent = Agent(
         provider=FallbackProvider([StreamsThenFails(), Works()]),
@@ -178,7 +178,7 @@ def test_fallback_does_not_duplicate_already_streamed_text():
 
 def test_fallback_does_not_retry_programming_errors():
     """버그에 폴백하면 같은 버그를 벤더 수만큼 반복 실행할 뿐이다."""
-    from strata import FallbackProvider
+    from strata.providers import FallbackProvider
 
     class Buggy(Provider):
         calls = 0

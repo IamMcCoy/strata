@@ -8,8 +8,6 @@ from dataclasses import field
 from types import MappingProxyType
 from typing import Any
 
-from strata.runtime.config import validate_limits
-
 
 @dataclass
 class AgentResult:
@@ -50,6 +48,9 @@ class Strategy(ABC):
         if description is not None:
             self.description = description
         if limits:
+            # 함수 안에서 import한다 — runtime은 strategies를 값으로 쓰므로(AgentResult)
+            # 모듈 최상단에서 부르면 두 패키지가 순환한다.
+            from strata.runtime.config import validate_limits
             self.limits = validate_limits(limits)
 
     @abstractmethod

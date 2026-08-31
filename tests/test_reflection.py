@@ -4,13 +4,13 @@ from __future__ import annotations
 import asyncio
 
 from conftest import final
-from strata import Agent
-from strata import AgentResult
-from strata import Provider
-from strata import REFLECTION_CRITIC_PROMPT
-from strata import ReflectionStrategy
-from strata import RuntimeConfig
-from strata import Strategy
+from strata.agent import Agent
+from strata.providers import Provider
+from strata.runtime import RuntimeConfig
+from strata.strategies import AgentResult
+from strata.strategies import REFLECTION_CRITIC_PROMPT
+from strata.strategies import ReflectionStrategy
+from strata.strategies import Strategy
 
 
 class ReflectionProvider(Provider):

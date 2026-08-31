@@ -3,7 +3,7 @@
 모델이 바깥 세상에 닿는 유일한 통로. **구현할 것은 `execute` 하나**다.
 
 ```python
-from strata import Tool
+from strata.tools import Tool
 
 
 class SearchTool(Tool):
@@ -77,7 +77,7 @@ raise ValueError('e')                                 # 나쁨
 ## 내장 tool 세 가지
 
 ```python
-from strata import MemoryTool, SpawnAgentTool, PythonTool
+from strata.tools import MemoryTool, SpawnAgentTool, PythonTool
 ```
 
 | | 이름 | 하는 일 |

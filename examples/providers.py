@@ -21,12 +21,12 @@ from __future__ import annotations
 import asyncio
 import os
 
-from strata import Agent
-from strata import AnthropicProvider
-from strata import GeminiProvider
-from strata import OpenAIProvider
-from strata import ReActStrategy
-from strata import Tool
+from strata.agent import Agent
+from strata.providers import AnthropicProvider
+from strata.providers import GeminiProvider
+from strata.providers import OpenAIProvider
+from strata.strategies import ReActStrategy
+from strata.tools import Tool
 
 try:
     from dotenv import load_dotenv

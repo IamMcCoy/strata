@@ -370,7 +370,7 @@ messages=[*(history or []), {'role': 'user', 'content': task}]
 이건 매번 다시 짜기엔 틀리기 쉬워서 코어가 함수 하나를 준다 — **정책이 아니라 안전한 지점**이다:
 
 ```python
-from strata import trim_history
+from strata.conversation import trim_history
 
 history = trim_history(db.load(session_id), keep_turns=10)
 result = await agent.run(task, history=history)
