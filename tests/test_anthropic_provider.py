@@ -112,3 +112,21 @@ if __name__ == '__main__':
     test_response_totals_usage_because_anthropic_does_not()
     test_max_retries_reaches_the_client()
     print('anthropic ok')
+
+
+def test_thinking_blocks_become_reasoning_not_answer_text():
+    """thinking은 text와 다른 블록 타입이다 — 안 꺼내면 그냥 버려지고, text에 섞으면 답이 오염된다.
+
+    스트리밍 경로도 같은 함수를 쓴다(SDK stream 헬퍼의 get_final_message → _to_model_response).
+    text_stream은 text 블록만 흘리므로 사고가 on_delta로 새지 않는다.
+    """
+    message = SimpleNamespace(
+        content=[
+            SimpleNamespace(type='thinking', thinking='17*23 = 17*20 + 17*3'),
+            SimpleNamespace(type='text', text='391'),
+        ],
+        usage=None,
+    )
+    response = _to_model_response(message)
+    assert response.text == '391'
+    assert response.reasoning == '17*23 = 17*20 + 17*3'

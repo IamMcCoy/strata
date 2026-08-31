@@ -78,7 +78,11 @@ def _to_model_response(message: Any) -> ModelResponse:
         ToolCall(name=block.name, arguments=dict(block.input), id=block.id)
         for block in message.content if block.type == 'tool_use'
     ]
-    return ModelResponse(text=text, tool_calls=tool_calls, usage=_usage(message), raw=message)
+    # thinking 블록은 text와 별개의 블록 타입이라 위 join에 안 섞인다 — 그냥 버려지고 있었다.
+    reasoning = ''.join(block.thinking for block in message.content if block.type == 'thinking') or None
+    return ModelResponse(
+        text=text, tool_calls=tool_calls, usage=_usage(message), reasoning=reasoning, raw=message,
+    )
 
 
 class AnthropicProvider(Provider):
@@ -90,6 +94,12 @@ class AnthropicProvider(Provider):
     max_tokens는 Anthropic이 **필수**로 요구한다 — 기본값을 두되 model_params로 덮을 수 있다.
     max_retries: OpenAIProvider와 같은 이름·같은 기본값(2). SDK가 429·5xx를 지수 백오프로
     재시도한다. 총 대기 시간은 대략 max_retries × timeout이다 (ADR-0012).
+
+    **알려진 한계 — extended thinking + tool 조합**: `thinking`을 켠 상태로 tool을 왕복하면
+    Anthropic은 이전 턴의 thinking 블록(서명 포함)을 그대로 돌려받기를 요구한다. 지금은
+    `ModelResponse.reasoning`에 텍스트만 담고 messages로 되싣지 않으므로 그 조합은 400이 난다.
+    고치려면 Gemini의 `thought_signature`와 같은 배관(`ToolCall.provider_state`)이 필요하다 —
+    실제로 그 조합을 쓰는 소비자가 생기면 그때 판다. thinking만(tool 없이)은 문제없다.
 
     **미검증**: 이 Provider는 실제 Anthropic API로 호출해본 적이 없다. 메시지 변환은
     단위 테스트(`tests/test_anthropic_provider.py`)로 고정돼 있지만 스트리밍 경로와

@@ -18,7 +18,7 @@ from strata.strategies import ReActStrategy
 from strata.strategies import Strategy
 
 
-def chunk(content=None, tool_call=None, usage=None):
+def chunk(content=None, tool_call=None, usage=None, reasoning=None):
     """OpenAI 스트리밍 청크 흉내. usage 청크는 choices가 비어 있다."""
     if usage is not None:
         return SimpleNamespace(
@@ -26,7 +26,9 @@ def chunk(content=None, tool_call=None, usage=None):
                 prompt_tokens=usage[0], completion_tokens=usage[1], total_tokens=usage[0] + usage[1],
             ),
         )
-    delta = SimpleNamespace(content=content, tool_calls=[tool_call] if tool_call else None)
+    delta = SimpleNamespace(
+        content=content, tool_calls=[tool_call] if tool_call else None, reasoning_content=reasoning,
+    )
     return SimpleNamespace(choices=[SimpleNamespace(delta=delta)], usage=None)
 
 
@@ -47,6 +49,23 @@ def test_stream_accumulates_text_and_usage():
     assert seen == ['안녕', '하세', '요'], '도착하는 대로 흘러야 한다'
     assert response.text == '안녕하세요', '반환은 여전히 완결된 응답이다'
     assert response.usage['total_tokens'] == 15, 'usage가 새면 token_budget이 무의미해진다'
+
+
+def test_stream_collects_reasoning_without_leaking_it_into_deltas():
+    """사고 조각(reasoning_content)은 모으되 on_delta로는 흘리지 않는다 — on_delta는 답의 스트림이다."""
+    seen: list[str] = []
+    chunks = [chunk(reasoning='1+2를 '), chunk(reasoning='계산'), chunk('3'), chunk(usage=(1, 1))]
+    response = asyncio.run(_consume_stream(as_stream(chunks), seen.append))
+
+    assert seen == ['3'], '사고가 답 스트림에 섞이면 앱이 그대로 렌더한다'
+    assert response.text == '3'
+    assert response.reasoning == '1+2를 계산', '사고 모드가 켜졌다는 유일한 증거'
+
+
+def test_stream_without_reasoning_leaves_the_field_none():
+    """사고를 끄면(또는 서버가 안 보내면) None — 켜졌는지 아닌지를 이 값으로 가른다."""
+    response = asyncio.run(_consume_stream(as_stream([chunk('안녕'), chunk(usage=(1, 1))]), None))
+    assert response.reasoning is None
 
 
 def test_stream_reassembles_split_tool_calls():

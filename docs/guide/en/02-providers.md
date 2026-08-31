@@ -70,7 +70,8 @@ ReActStrategy(model_params={'temperature': 0})                            # 0 fo
 ```
 
 The core does not interpret this dict — it passes it straight to the SDK, because supported keys
-differ by vendor (`top_k` is Anthropic-only, reasoning models reject `temperature`).
+differ by vendor (reasoning models reject `temperature`, and anthropic SDK 1.0 no longer accepts
+`temperature`/`top_p`/`top_k` at all — they moved into `output_config`).
 
 ## Streaming
 
@@ -99,6 +100,56 @@ check once:
 ```python
 assert agent.runtime.usage['total_tokens'] > 0
 ```
+
+## Thinking / reasoning mode
+
+How you turn it on differs by vendor. The core does not interpret this dict, so put it in
+`model_params` as-is:
+
+```python
+# vLLM — the SDK's create() has no **kwargs. Vendor extensions go through extra_body.
+OpenAIProvider(
+    base_url='http://localhost:8000/v1', model='Gemma4-12B-it',
+    model_params={'extra_body': {'chat_template_kwargs': {'enable_thinking': False}}},
+)
+
+OpenAIProvider(model='o4-mini', model_params={'reasoning_effort': 'high'})
+AnthropicProvider(model='claude-sonnet-5', max_tokens=4096,
+                  model_params={'thinking': {'type': 'enabled', 'budget_tokens': 2048}})
+GeminiProvider(model='gemini-3.5-flash-lite', model_params={
+    'thinking_config': types.ThinkingConfig(include_thoughts=True, thinking_budget=1024)})
+```
+
+**Passing the parameter does not mean it is on** — a server silently ignores keys it does not
+know. Check in two places:
+
+```python
+result = await agent.run(task)
+result.metadata.get('reasoning')   # ['thought 1', 'thought 2', ...] or None (off/unsupported)
+agent.runtime.usage['reasoning_tokens']
+```
+
+`reasoning` is a list in `generate` call order — if ReAct calls tools three times, there are three
+thoughts. In recursive runs a child's thoughts roll up to the root (one `Runtime` per run).
+
+Vendors expose different things, so **the evidence splits in two** (measured):
+
+| Provider | `metadata['reasoning']` | `usage['reasoning_tokens']` |
+| --- | --- | --- |
+| vLLM / DeepSeek | full text | (when present) |
+| Claude | full text | — |
+| Gemini | summary | ✅ |
+| OpenAI (o-series) | **none** | ✅ |
+
+Stock OpenAI **never** returns thinking text. A `None` there does not mean it is off — read
+`reasoning_tokens` instead. Conversely vLLM reports `reasoning_tokens: 2` even with thinking off,
+because of the empty `<think></think>` block — **the difference between off and on is the
+evidence, not the absolute value** (measured on Gemma4-12B: 2 vs 422). `examples/thinking.py`
+runs that comparison in one go.
+
+Thinking never flows through `on_delta`; the app only receives answer chunks. Mixing them would
+render thinking as the answer with no way back. The cost is that a longer thought means a longer
+silence before the first chunk. The text arrives once, after the run, in `metadata['reasoning']`.
 
 ## Errors
 

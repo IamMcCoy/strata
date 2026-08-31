@@ -92,11 +92,16 @@ def _usage(raw: Any) -> dict:
         return {}
     incoming = meta.prompt_token_count or 0
     outgoing = meta.candidates_token_count or 0
-    return {
+    usage = {
         'input_tokens': incoming,
         'output_tokens': outgoing,
         'total_tokens': meta.total_token_count or (incoming + outgoing),
     }
+    # 사고 토큰은 candidates_token_count 밖에 있고 total_token_count 안에 있다 — total은 그대로 둔다.
+    thoughts = getattr(meta, 'thoughts_token_count', None)
+    if thoughts:
+        usage['reasoning_tokens'] = thoughts
+    return usage
 
 
 def _parts_of(response: Any) -> list:
@@ -107,11 +112,15 @@ def _parts_of(response: Any) -> list:
     return getattr(content, 'parts', None) or []
 
 
-def _collect(parts: list, texts: list[str], calls: list[ToolCall]) -> None:
-    """한 응답(또는 스트림 청크)의 part들을 텍스트와 tool 호출로 가른다."""
+def _collect(parts: list, texts: list[str], calls: list[ToolCall], thoughts: list[str]) -> None:
+    """한 응답(또는 스트림 청크)의 part들을 사고·텍스트·tool 호출로 가른다.
+
+    thought part도 `text`를 들고 온다(thinking_config include_thoughts=True일 때만 온다).
+    `part.thought`로 가르지 않으면 **사고가 답에 섞여** 나간다.
+    """
     for part in parts:
         if getattr(part, 'text', None):
-            texts.append(part.text)
+            (thoughts if getattr(part, 'thought', False) else texts).append(part.text)
         call = getattr(part, 'function_call', None)
         if call is not None:
             # ponytail: function_call은 청크 하나에 온전히 온다고 본다. partial_args가 실제로
@@ -144,7 +153,8 @@ class GeminiProvider(Provider):
     **총 시도 횟수**(attempts)를 받으므로 +1로 변환한다 — 안 그러면 같은 값이 벤더마다
     다르게 동작한다.
 
-    검증됨: gemini-3.5-flash-lite로 스트리밍·tool 왕복·usage 집계까지 실제 호출로 확인했다.
+    검증됨: gemini-3.5-flash-lite로 스트리밍·tool 왕복·usage 집계·사고 모드까지 실제 호출로
+    확인했다(include_thoughts=True면 thought part가 오고 thoughts_token_count가 실린다).
 
     Gemini 3.x는 function_call part의 `thought_signature`를 다음 턴에 돌려받아야 한다 —
     없으면 400으로 거절한다. bytes라 messages(순수 JSON)에 직접 못 담으므로
@@ -187,7 +197,15 @@ class GeminiProvider(Provider):
         gemini_tools = _to_gemini_tools(tools)
         if gemini_tools:
             config['tools'] = gemini_tools
-        return self._types.GenerateContentConfig(**config) if config else None
+        # AFC(automatic function calling)는 SDK가 tool을 **대신 실행하는** 루프다. 기본값이 켜짐이라
+        # 명시적으로 끈다 — 루프의 주인은 Runtime이어야 한다(한도·취소·Execution Tree·usage가 전부
+        # execute_tool에 걸려 있다, ADR-0007). client.interactions를 안 쓰는 것과 같은 이유다(ADR-0012).
+        # 부수 효과로 매 호출 찍히던 'Direct use of AFC ... not recommended' 경고도 사라진다.
+        config.setdefault(
+            'automatic_function_calling',
+            self._types.AutomaticFunctionCallingConfig(disable=True),
+        )
+        return self._types.GenerateContentConfig(**config)
 
     async def generate(
         self,
@@ -220,22 +238,27 @@ class GeminiProvider(Provider):
         }
         texts: list[str] = []
         calls: list[ToolCall] = []
+        thoughts: list[str] = []
 
         if on_delta is None:
             response = await self.client.aio.models.generate_content(**request)
-            _collect(_parts_of(response), texts, calls)
+            _collect(_parts_of(response), texts, calls, thoughts)
             return ModelResponse(
-                text=''.join(texts) or None, tool_calls=calls, usage=_usage(response), raw=response,
+                text=''.join(texts) or None, tool_calls=calls, usage=_usage(response),
+                reasoning=''.join(thoughts) or None, raw=response,
             )
 
         usage: dict = {}
         stream = await self.client.aio.models.generate_content_stream(**request)
         async for chunk in stream:
             before = len(texts)
-            _collect(_parts_of(chunk), texts, calls)
+            _collect(_parts_of(chunk), texts, calls, thoughts)
             for text in texts[before:]:
                 on_delta(text)
             # usage는 청크마다 누적본으로 온다 — 마지막 값이 최종이다
             if _usage(chunk):
                 usage = _usage(chunk)
-        return ModelResponse(text=''.join(texts) or None, tool_calls=calls, usage=usage)
+        return ModelResponse(
+            text=''.join(texts) or None, tool_calls=calls, usage=usage,
+            reasoning=''.join(thoughts) or None,
+        )
