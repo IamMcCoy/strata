@@ -45,6 +45,39 @@ provider = VLLMProvider(base_url="http://localhost:8000/v1", model="qwen")
 - `usage` — 토큰 사용량. **표준 키 `input_tokens` / `output_tokens` / `total_tokens`로
   변환하는 책임은 Provider에 있다** — Runtime의 token budget
   집계([runtime.md](runtime.md#execution-control))가 이 키를 전제한다.
+  `reasoning_tokens`는 선택 키(사고 모드일 때만)이고 **total에 더하지 않는다** — 벤더가 이미 반영했다.
+- `reasoning` — 사고 모드(thinking/reasoning)의 사고 과정. **진단용이지 답이 아니다.**
+
+#### 사고 과정(reasoning)을 어디까지 올리나
+
+파라미터를 넘겼다고 사고가 켜진 게 아니다 — 모르는 키는 서버가 조용히 무시한다.
+켜졌는지 확인할 방법이 `ModelResponse`에 없으면 **조용히 틀린 설정**이 남으므로 값으로 올린다.
+다만 세 층에서 각각 다르게 다룬다:
+
+| 층 | reasoning | 이유 |
+| --- | --- | --- |
+| `ModelResponse.reasoning` | 싣는다 | 사고가 켜졌는지의 유일한 증거 |
+| `Runtime.reasoning` | 싣는다 | run 전체 누적. `usage`와 같은 층이고 child도 여기 모인다 |
+| `AgentResult.metadata['reasoning']` | 싣는다 | 앱이 보는 자리. **`Agent.run`에서만** 채운다 (사고가 없으면 키 자체가 없다) |
+| `on_delta` | **안 싣는다** | `on_delta`는 답의 스트림이다 — 섞으면 앱이 사고를 답으로 렌더한다 |
+| `messages` | **안 싣는다** | 되싣으면 벤더가 거절하거나 컨텍스트만 불린다 (ADR-0010) |
+| `AgentResult` 최상위 필드 | **안 싣는다** | child→parent 계약이라 재귀 깊이마다 사고가 올라간다 — 사고는 답보다 길다 (불변식 4) |
+
+`metadata['messages']`(transcript)와 정확히 같은 규칙이다: `Agent.run`에만 붙이고
+`spawn_agent`가 만드는 child의 `AgentResult`에는 안 싣는다. 값은 `generate` 호출 순서대로
+쌓인 `list[str]`이다 — ReAct는 한 run에 여러 번 부르고, 합치면 어느 판단이 어느 턴 것인지 사라진다.
+
+벤더가 주는 것이 제각각이라 증거도 둘로 나뉜다 (실측):
+
+| Provider | 켜는 법 | reasoning | reasoning_tokens |
+| --- | --- | --- | --- |
+| vLLM / DeepSeek | `extra_body={'chat_template_kwargs': {'enable_thinking': True}}` | 원문 | — |
+| Claude | `thinking={'type': 'enabled', 'budget_tokens': N}` | 원문(thinking 블록) | — |
+| Gemini | `thinking_config=ThinkingConfig(include_thoughts=True, ...)` | 요약본(thought part) | ✅ |
+| OpenAI (o-시리즈) | `reasoning_effort='high'` | **안 준다** | ✅ |
+
+OpenAI 순정은 텍스트를 절대 주지 않으므로 `reasoning_tokens`만이 증거다 —
+그래서 usage에 키가 하나 더 필요했다. 확인은 `examples/thinking.py`.
 
 `Tool.input_schema`(JSON Schema)를 각 Provider의 tool 형식으로 변환하는 책임도
 Provider에 있다 — Strategy와 Tool은 Provider별 형식을 모른다.
@@ -52,7 +85,8 @@ Provider에 있다 — Strategy와 Tool은 Provider별 형식을 모른다.
 ### 모델 파라미터 (temperature 등)
 
 샘플링 파라미터는 코어가 해석하지 않는 **불투명 dict**다 — Provider마다 지원 키가 다르고
-(`top_k`는 Anthropic만, reasoning 모델은 `temperature` 거부) 코어는 모델 중립을 유지한다.
+(reasoning 모델은 `temperature`를 거부하고, anthropic SDK 1.0은 `temperature`·`top_p`·`top_k`를
+아예 받지 않는다 — `output_config`로 옮겼다) 코어는 모델 중립을 유지한다.
 `generate(**kwargs)`가 Runtime을 거쳐 Provider 요청에 그대로 실린다. 입구는 두 층:
 
 ```python

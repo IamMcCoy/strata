@@ -98,22 +98,36 @@ def fake_response(parts, usage=None):
     )
 
 
-def part(text=None, call=None, signature=None):
+def part(text=None, call=None, signature=None, thought=False):
     function_call = SimpleNamespace(name=call[0], args=call[1], id=call[2]) if call else None
-    return SimpleNamespace(text=text, function_call=function_call, thought_signature=signature)
+    return SimpleNamespace(
+        text=text, function_call=function_call, thought_signature=signature, thought=thought,
+    )
 
 
 def test_collect_splits_text_and_tool_calls():
-    texts, calls = [], []
+    texts, calls, thoughts = [], [], []
     _collect(
         _parts_of(
             fake_response([
                 part(text='답은 '), part(text='42'), part(call=('add', {'a': 1}, 'call_x')),
             ]),
-        ), texts, calls,
+        ), texts, calls, thoughts,
     )
     assert ''.join(texts) == '답은 42'
     assert calls[0].name == 'add' and calls[0].arguments == {'a': 1} and calls[0].id == 'call_x'
+    assert thoughts == []
+
+
+def test_thought_parts_do_not_leak_into_the_answer():
+    """thought part도 text를 들고 온다 — 안 가르면 사고가 답에 섞여 나간다."""
+    texts, calls, thoughts = [], [], []
+    _collect(
+        _parts_of(fake_response([part(text='먼저 1+2를 더한다', thought=True), part(text='3입니다')])),
+        texts, calls, thoughts,
+    )
+    assert ''.join(texts) == '3입니다'
+    assert ''.join(thoughts) == '먼저 1+2를 더한다'
 
 
 def test_usage_maps_to_standard_keys():
@@ -141,7 +155,7 @@ def test_thought_signature_round_trips_through_provider_state():
 
     raw = b'\x12^\n\\\x01\x11M2'  # 실제 응답에서 오는 형태(바이너리)
     texts, calls = [], []
-    _collect([part(call=('add', {'a': 1}, 'c1'), signature=raw)], texts, calls)
+    _collect([part(call=('add', {'a': 1}, 'c1'), signature=raw)], texts, calls, [])
 
     assert calls[0].provider_state['thought_signature'] == base64.b64encode(raw).decode()
     dumped = json.dumps([asdict(c) for c in calls])  # 앱의 저장소를 왕복하는 지점
@@ -171,3 +185,21 @@ if __name__ == '__main__':
         if name.startswith('test_'):
             fn()
     print('gemini ok')
+
+
+def test_afc_is_disabled_so_the_runtime_owns_the_loop():
+    """AFC는 SDK가 tool을 대신 실행하는 루프다 — 켜져 있으면 execute_tool을 우회한다.
+
+    기본값이 켜짐이므로 명시적으로 꺼야 한다. 한도·취소·Execution Tree가 전부
+    Runtime.execute_tool에 걸려 있다(ADR-0007).
+    """
+    from strata.providers import GeminiProvider
+    provider = GeminiProvider(model='gemini-2.0-flash', api_key='dummy')
+
+    config = provider._config(None, None, {})
+    assert config.automatic_function_calling.disable is True
+
+    # tool과 system이 함께 있을 때도 유지된다 — 실제로 AFC가 도는 조건이 그때다
+    with_tools = provider._config('지시', [AddTool()], {'temperature': 0})
+    assert with_tools.automatic_function_calling.disable is True
+    assert with_tools.system_instruction == '지시'

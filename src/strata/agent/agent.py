@@ -107,6 +107,11 @@ class Agent:
         # 코어가 남긴 기록(트리·로그)을 가리키는 이름. 앱은 자기 task_id 옆에 이걸 적어둔다.
         # 인자로 받지 않는다 — 외부 문자열에 유일성을 의존시키지 않는다 (ADR-0011).
         result.metadata['run_id'] = runtime.run_id
+        # 사고 과정 — 호출 순서대로. messages와 같은 규칙이다: Agent.run에만 붙이고
+        # child의 AgentResult에는 안 싣는다. 사고가 없으면(꺼짐/미지원) 키 자체가 없다 —
+        # 빈 리스트를 넣으면 "껐다"와 "이 벤더는 안 준다"가 같아 보인다.
+        if runtime.reasoning:
+            result.metadata['reasoning'] = runtime.reasoning
         runtime.execution.close(node.id, result)
         logger.info(
             'run=%s exec=%s agent.finished status=%s tokens=%s',

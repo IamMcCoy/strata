@@ -43,12 +43,19 @@ class ModelResponse:
 
     usage 표준 키: input_tokens / output_tokens / total_tokens.
     자사 형식을 이 키로 변환하는 책임은 Provider 구현에 있다 — token budget 집계의 전제.
+
+    reasoning은 사고 모드(thinking/reasoning)의 사고 과정 원문이다. 답이 아니라 **진단용**이다 —
+    사고가 실제로 켜졌는지는 이것 말고 확인할 방법이 없다(끄면 None, 켜면 문자열).
+    벤더 필드가 제각각이라(OpenAI compat `reasoning_content`, Anthropic thinking 블록,
+    Gemini thought part) 여기서 하나로 모은다. text에 섞지 않고, messages에 되싣지도 않는다 —
+    다음 턴에 돌려주면 벤더가 거절하거나 컨텍스트만 불린다.
     """
 
     text: str | None = None
     tool_calls: list[ToolCall] = field(default_factory=list)
     usage: dict = field(default_factory=dict)
     raw: object = None
+    reasoning: str | None = None
 
 
 class Provider(ABC):

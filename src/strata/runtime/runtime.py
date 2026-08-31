@@ -98,6 +98,11 @@ class Runtime:
         self.config = config or RuntimeConfig()
         self.execution = ExecutionManager()
         self.usage: dict[str, int] = dict.fromkeys(USAGE_KEYS, 0)  # run 전체 누적
+        # 사고 과정(reasoning) 원문을 generate 호출 순서대로. usage와 같은 층 — run 전체 누적이고,
+        # child도 Runtime을 공유하므로 재귀 전체의 사고가 여기 모인다.
+        # 답이 아니라 진단용이라 Agent.run이 metadata로만 내보낸다(AgentResult 최상위 필드로
+        # 두면 child→parent 계약에 실려 재귀에서 context가 폭발한다 — 사고는 답보다 길다).
+        self.reasoning: list[str] = []
         # spawn 시 strategy 미지정이면 이 값을 상속 — root Agent가 설정 (ADR-0006)
         self.default_strategy: Strategy | None = None
 
@@ -175,14 +180,18 @@ class Runtime:
             kwargs = {**kwargs, 'on_delta': sink}
         response = await self.provider.generate(messages, tools=tools, **{**self.provider.model_params, **kwargs})
         logger.debug(
-            'run=%s exec=%s provider.response tokens=%s tool_calls=%d',
+            'run=%s exec=%s provider.response tokens=%s tool_calls=%d reasoning=%s',
             self.run_id, _exec_id(context), response.usage.get('total_tokens'), len(response.tool_calls),
+            # 사고 모드가 실제로 켜졌는지의 유일한 증거. 원문은 길고 민감할 수 있어 길이만 남긴다.
+            len(response.reasoning) if response.reasoning else None,
         )
         for key in USAGE_KEYS:
             amount = int(response.usage.get(key, 0) or 0)
             self.usage[key] += amount
             if node is not None:
                 node.usage[key] += amount
+        if response.reasoning:
+            self.reasoning.append(response.reasoning)
         _warn_if_tool_call_leaked_as_text(self.run_id, context, tools, response)
         return response
 

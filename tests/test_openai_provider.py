@@ -78,3 +78,55 @@ def test_response_without_tool_calls_is_final_text():
     assert response.text == 'answer'
     assert response.tool_calls == []
     assert response.usage == {}
+
+
+def test_reasoning_content_is_carried_out_of_the_response():
+    """사고 모드가 실제로 켜졌는지는 reasoning_content 유무로만 확인된다.
+
+    OpenAI SDK 모델에는 없는 필드지만 extra='allow'라 서버(vLLM 등)가 보낸 값이 객체에 붙어 온다.
+    """
+    completion = SimpleNamespace(
+        choices=[
+            SimpleNamespace(
+                message=SimpleNamespace(
+                    content='3입니다', tool_calls=None, reasoning_content='1+2를 계산한다',
+                ),
+            ),
+        ],
+        usage=None,
+    )
+    response = _to_model_response(completion)
+    assert response.text == '3입니다', '사고가 답에 섞이면 안 된다'
+    assert response.reasoning == '1+2를 계산한다'
+
+
+def test_response_without_reasoning_leaves_the_field_none():
+    """필드를 안 보내는 서버(순정 OpenAI)에서도 깨지지 않고, 사고 꺼짐과 구분된다."""
+    completion = SimpleNamespace(
+        choices=[SimpleNamespace(message=SimpleNamespace(content='answer', tool_calls=None))],
+        usage=None,
+    )
+    assert _to_model_response(completion).reasoning is None
+
+
+def test_reasoning_tokens_are_extracted_from_usage_details():
+    """순정 OpenAI(o-시리즈)는 사고 텍스트를 안 준다 — 이 숫자가 사고가 돌았다는 유일한 증거다."""
+    completion = SimpleNamespace(
+        choices=[SimpleNamespace(message=SimpleNamespace(content='answer', tool_calls=None))],
+        usage=SimpleNamespace(
+            prompt_tokens=10, completion_tokens=90, total_tokens=100,
+            completion_tokens_details=SimpleNamespace(reasoning_tokens=64),
+        ),
+    )
+    usage = _to_model_response(completion).usage
+    assert usage['reasoning_tokens'] == 64
+    # total에 더하지 않는다 — completion_tokens 안에 이미 들어 있다
+    assert usage['total_tokens'] == 100
+
+
+def test_usage_without_reasoning_details_has_no_reasoning_key():
+    completion = SimpleNamespace(
+        choices=[SimpleNamespace(message=SimpleNamespace(content='answer', tool_calls=None))],
+        usage=SimpleNamespace(prompt_tokens=1, completion_tokens=2, total_tokens=3),
+    )
+    assert 'reasoning_tokens' not in _to_model_response(completion).usage

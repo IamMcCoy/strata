@@ -59,6 +59,25 @@ def _to_openai_tools(tools: list[Tool] | None) -> list[dict] | None:
     ]
 
 
+def _usage(raw: Any) -> dict:
+    """OpenAI usage → 표준 키. reasoning_tokens는 o-시리즈/gpt-5에서만 실린다.
+
+    순정 OpenAI는 사고 **텍스트**를 절대 주지 않는다 — 이 숫자가 사고가 돌았다는 유일한 증거다.
+    completion_tokens의 부분집합이므로 total에는 더하지 않는다.
+    """
+    if not raw:
+        return {}
+    usage = {
+        'input_tokens': raw.prompt_tokens,
+        'output_tokens': raw.completion_tokens,
+        'total_tokens': raw.total_tokens,
+    }
+    details = getattr(raw, 'completion_tokens_details', None)
+    if getattr(details, 'reasoning_tokens', None):
+        usage['reasoning_tokens'] = details.reasoning_tokens
+    return usage
+
+
 def _to_model_response(completion: Any) -> ModelResponse:
     """OpenAI 응답 → ModelResponse. usage는 표준 키로 변환한다."""
     message = completion.choices[0].message
@@ -70,14 +89,16 @@ def _to_model_response(completion: Any) -> ModelResponse:
         )
         for call in (message.tool_calls or [])
     ]
-    usage: dict = {}
-    if getattr(completion, 'usage', None):
-        usage = {
-            'input_tokens': completion.usage.prompt_tokens,
-            'output_tokens': completion.usage.completion_tokens,
-            'total_tokens': completion.usage.total_tokens,
-        }
-    return ModelResponse(text=message.content, tool_calls=tool_calls, usage=usage, raw=completion)
+    usage = _usage(getattr(completion, 'usage', None))
+    return ModelResponse(
+        text=message.content,
+        tool_calls=tool_calls,
+        usage=usage,
+        # 비표준 확장 필드 — SDK 모델이 extra='allow'라 서버가 보낸 그대로 붙어 있다.
+        # vLLM·DeepSeek는 reasoning_content, OpenRouter는 reasoning. 안 보내면 None.
+        reasoning=getattr(message, 'reasoning_content', None) or getattr(message, 'reasoning', None),
+        raw=completion,
+    )
 
 
 async def _consume_stream(stream: Any, on_delta: Callable[[str], None] | None) -> ModelResponse:
@@ -87,18 +108,20 @@ async def _consume_stream(stream: Any, on_delta: Callable[[str], None] | None) -
     usage는 마지막 청크에만 실린다(stream_options include_usage). 그 청크는 choices가 비어 있다.
     """
     text_parts: list[str] = []
+    reasoning_parts: list[str] = []
     calls: dict[int, dict] = {}
     usage: dict = {}
     async for chunk in stream:
         if getattr(chunk, 'usage', None):
-            usage = {
-                'input_tokens': chunk.usage.prompt_tokens,
-                'output_tokens': chunk.usage.completion_tokens,
-                'total_tokens': chunk.usage.total_tokens,
-            }
+            usage = _usage(chunk.usage)
         if not chunk.choices:
             continue
         delta = chunk.choices[0].delta
+        # ponytail: 사고 조각은 on_delta로 흘리지 않는다 — on_delta는 "답"의 스트림이고
+        # 여기에 섞으면 앱이 사고를 답으로 렌더한다. 필요하면 별도 콜백을 그때 판다.
+        reasoning_delta = getattr(delta, 'reasoning_content', None) or getattr(delta, 'reasoning', None)
+        if reasoning_delta:
+            reasoning_parts.append(reasoning_delta)
         if getattr(delta, 'content', None):
             text_parts.append(delta.content)
             if on_delta is not None:
@@ -114,7 +137,12 @@ async def _consume_stream(stream: Any, on_delta: Callable[[str], None] | None) -
         ToolCall(name=c['name'], arguments=json.loads(c['arguments'] or '{}'), id=c['id'])
         for _, c in sorted(calls.items())
     ]
-    return ModelResponse(text=''.join(text_parts) or None, tool_calls=tool_calls, usage=usage)
+    return ModelResponse(
+        text=''.join(text_parts) or None,
+        tool_calls=tool_calls,
+        usage=usage,
+        reasoning=''.join(reasoning_parts) or None,
+    )
 
 
 class OpenAIProvider(Provider):
