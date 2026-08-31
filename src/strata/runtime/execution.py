@@ -3,8 +3,12 @@ from __future__ import annotations
 import itertools
 from dataclasses import dataclass
 from dataclasses import field
+from typing import TYPE_CHECKING
 
-from strata.strategies.base import AgentResult
+if TYPE_CHECKING:
+    # Runtime은 Strategy를 몰라도 된다 — 타입 힌트로만 쓰므로 런타임 import를 피한다.
+    # (없으면 strategies/__init__.py ↔ runtime 순환 import가 난다)
+    from strata.strategies.base import AgentResult
 
 USAGE_KEYS = ('input_tokens', 'output_tokens', 'total_tokens')
 

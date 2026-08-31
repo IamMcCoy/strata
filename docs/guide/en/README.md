@@ -36,11 +36,28 @@ uv add 'strata[openai]'     # providers are extras: openai / anthropic / gemini 
 
 Python 3.12 or later.
 
+## Import Paths
+
+Names are grouped by role — `strata.agent` / `strata.providers` / `strata.strategies` /
+`strata.tools` / `strata.memory` / `strata.runtime`.
+
+```python
+from strata.agent import Agent
+from strata.providers import OpenAIProvider
+from strata.strategies import ReActStrategy
+```
+
+Everything is importable from the top level too (`from strata import Agent`). Same objects —
+`tests/test_packaging.py` enforces that the two paths never drift apart.
+
 ## Five Minutes
 
 ```python
 import asyncio
-from strata import Agent, OpenAIProvider, ReActStrategy, Tool
+from strata.agent import Agent
+from strata.providers import OpenAIProvider
+from strata.strategies import ReActStrategy
+from strata.tools import Tool
 
 
 class Add(Tool):

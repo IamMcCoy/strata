@@ -10,11 +10,11 @@ import uuid
 from conftest import call
 from conftest import final
 from conftest import ScriptedProvider
-from strata import Agent
-from strata import AgentResult
-from strata import ReActStrategy
-from strata import Strategy
-from strata import Tool
+from strata.agent import Agent
+from strata.strategies import AgentResult
+from strata.strategies import ReActStrategy
+from strata.strategies import Strategy
+from strata.tools import Tool
 
 
 class SlowTool(Tool):

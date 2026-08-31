@@ -13,10 +13,10 @@ import asyncio
 import os
 import random
 
-from strata import Agent
-from strata import OpenAIProvider
-from strata import RLMStrategy
-from strata import RuntimeConfig
+from strata.agent import Agent
+from strata.providers import OpenAIProvider
+from strata.runtime import RuntimeConfig
+from strata.strategies import RLMStrategy
 
 try:
     from dotenv import load_dotenv

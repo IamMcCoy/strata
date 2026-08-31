@@ -16,10 +16,10 @@ import sys
 from pathlib import Path
 
 import pytest
-from strata import Agent
-from strata import InMemory
-from strata import MemoryTool
-from strata import ReActStrategy
+from strata.agent import Agent
+from strata.memory import InMemory
+from strata.strategies import ReActStrategy
+from strata.tools import MemoryTool
 
 sys.path.insert(0, str(Path(__file__).parent.parent / 'tests'))
 from conftest import call      # noqa: E402

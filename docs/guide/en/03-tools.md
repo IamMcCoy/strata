@@ -5,7 +5,7 @@
 The model's only channel to the outside world. **You implement exactly one thing: `execute`.**
 
 ```python
-from strata import Tool
+from strata.tools import Tool
 
 
 class SearchTool(Tool):
@@ -81,7 +81,7 @@ raise ValueError('e')                                 # bad
 ## The three built-in tools
 
 ```python
-from strata import MemoryTool, SpawnAgentTool, PythonTool
+from strata.tools import MemoryTool, SpawnAgentTool, PythonTool
 ```
 
 | | Name | What it does |

@@ -11,14 +11,14 @@ import json
 from conftest import call
 from conftest import final
 from conftest import ScriptedProvider
-from strata import Agent
-from strata import AgentResult
-from strata import InMemory
-from strata import MemoryItem
-from strata import MemoryTool
-from strata import ReActStrategy
-from strata import RuntimeConfig
-from strata import Strategy
+from strata.agent import Agent
+from strata.memory import InMemory
+from strata.memory import MemoryItem
+from strata.runtime import RuntimeConfig
+from strata.strategies import AgentResult
+from strata.strategies import ReActStrategy
+from strata.strategies import Strategy
+from strata.tools import MemoryTool
 
 
 def turns(provider, index=-1):

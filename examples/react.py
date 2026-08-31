@@ -9,12 +9,12 @@ from __future__ import annotations
 
 import asyncio
 
-from strata import Agent
-from strata import ModelResponse
-from strata import Provider
-from strata import ReActStrategy
-from strata import Tool
-from strata import ToolCall
+from strata.agent import Agent
+from strata.providers import ModelResponse
+from strata.providers import Provider
+from strata.providers import ToolCall
+from strata.strategies import ReActStrategy
+from strata.tools import Tool
 
 
 class MultiplyTool(Tool):

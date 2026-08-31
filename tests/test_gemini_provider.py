@@ -7,12 +7,12 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from strata import Tool
 from strata.providers.gemini import _collect
 from strata.providers.gemini import _parts_of
 from strata.providers.gemini import _to_gemini_contents
 from strata.providers.gemini import _to_gemini_tools
 from strata.providers.gemini import _usage
+from strata.tools import Tool
 
 
 class AddTool(Tool):
@@ -161,7 +161,7 @@ def test_tool_calls_without_a_signature_still_work():
 
 def test_max_retries_is_translated_to_attempts():
     """Gemini는 재시도 횟수가 아니라 총 시도 횟수를 받는다 — 변환하지 않으면 벤더마다 다르게 동작한다."""
-    from strata import GeminiProvider
+    from strata.providers import GeminiProvider
     provider = GeminiProvider(model='gemini-2.0-flash', api_key='dummy', max_retries=2)
     assert provider.client._api_client._http_options.retry_options.attempts == 3
 

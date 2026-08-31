@@ -10,11 +10,11 @@ from __future__ import annotations
 
 import asyncio
 
-from strata import Agent
-from strata import ModelResponse
-from strata import Provider
-from strata import RLMStrategy
-from strata import ToolCall
+from strata.agent import Agent
+from strata.providers import ModelResponse
+from strata.providers import Provider
+from strata.providers import ToolCall
+from strata.strategies import RLMStrategy
 
 CHAPTERS = [f'제{i}장. ' + f'이 장의 핵심 숫자는 {i * 11}이다. ' * 200 for i in range(1, 6)]
 BOOK = '\n'.join(CHAPTERS)  # 모델의 window에 올리지 않을 "거대" 입력

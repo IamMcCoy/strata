@@ -5,7 +5,8 @@
 ## 한도는 Runtime이 강제한다
 
 ```python
-from strata import Agent, RuntimeConfig
+from strata.agent import Agent
+from strata.runtime import RuntimeConfig
 
 agent = Agent(provider=..., strategy=..., config=RuntimeConfig(
     max_depth=5,          # 재귀 깊이

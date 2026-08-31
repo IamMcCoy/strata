@@ -12,13 +12,13 @@ from __future__ import annotations
 
 import asyncio
 
-from strata import Agent
-from strata import AgentResult
-from strata import ModelResponse
-from strata import Provider
-from strata import RouterStrategy
-from strata import Strategy
-from strata import ToolCall
+from strata.agent import Agent
+from strata.providers import ModelResponse
+from strata.providers import Provider
+from strata.providers import ToolCall
+from strata.strategies import AgentResult
+from strata.strategies import RouterStrategy
+from strata.strategies import Strategy
 
 
 class Announce(Strategy):

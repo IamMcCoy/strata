@@ -7,10 +7,10 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from strata import Tool
 from strata.providers.anthropic import _to_anthropic_messages
 from strata.providers.anthropic import _to_anthropic_tools
 from strata.providers.anthropic import _to_model_response
+from strata.tools import Tool
 
 
 class AddTool(Tool):
@@ -98,7 +98,7 @@ def test_response_totals_usage_because_anthropic_does_not():
 
 def test_max_retries_reaches_the_client():
     """OpenAIProvider와 같은 이름·같은 기본값이어야 갈아끼울 때 놀라지 않는다."""
-    from strata import AnthropicProvider
+    from strata.providers import AnthropicProvider
     assert AnthropicProvider(api_key='k').client.max_retries == 2
     assert AnthropicProvider(api_key='k', max_retries=5).client.max_retries == 5
 

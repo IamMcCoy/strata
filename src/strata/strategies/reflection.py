@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 from typing import Any
+from typing import TYPE_CHECKING
 
 from strata.agent.context import Context
-from strata.runtime.config import RuntimeConfig
-from strata.runtime.runtime import Runtime
 from strata.strategies.base import AgentResult
 from strata.strategies.base import Strategy
 from strata.strategies.react import ReActStrategy
+
+if TYPE_CHECKING:
+    from strata.runtime.runtime import Runtime
 
 # 비판자 child의 system 지시. 사용자 지시 뒤에 붙는다 — 사용자가 "한국어로" 같은 지시를 걸었으면
 # 비판 라운드에서도 유지되어야 한다. 교체는 ReflectionStrategy(critic_prompt=...).
@@ -97,6 +99,7 @@ class ReflectionStrategy(Strategy):
         # 파생된 한도는 **하한**이지 상한이 아니다: 기본값보다 낮을 때 내리면 한도가 run 전체
         # 공유이므로 worker(예: RecursiveStrategy)가 재귀 위임에 쓸 자식 수까지 같이 조여진다.
         # 필요한 만큼만 올리고, 모자라지 않으면 아무것도 제안하지 않는다.
+        from strata.runtime.config import RuntimeConfig  # 순환 회피 — base.py 주석 참고
         needed = 1 + rounds * 2
         raise_to = {'max_children': needed} if needed > RuntimeConfig().max_children else {}
         super().__init__(**{**raise_to, **limits})

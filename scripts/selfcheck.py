@@ -41,12 +41,12 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / 'src'))
 
-from strata import Agent                # noqa: E402
-from strata import OpenAIProvider       # noqa: E402
-from strata import ReActStrategy        # noqa: E402
-from strata import RuntimeConfig        # noqa: E402
-from strata import Tool                 # noqa: E402
-from strata import ToolEnv              # noqa: E402
+from strata.agent import Agent               # noqa: E402
+from strata.providers import OpenAIProvider  # noqa: E402
+from strata.runtime import RuntimeConfig     # noqa: E402
+from strata.strategies import ReActStrategy  # noqa: E402
+from strata.tools import Tool                # noqa: E402
+from strata.tools import ToolEnv             # noqa: E402
 
 SELF = Path(__file__).resolve().parent.parent
 
@@ -133,9 +133,9 @@ Audit {path} against the project rules.
 PLANTED_PATH = 'src/strata/strategies/planted.py'
 PLANTED_SOURCE = '''from __future__ import annotations
 
-from strata.providers.openai import OpenAIProvider
-from strata.strategies.base import AgentResult
-from strata.strategies.base import Strategy
+from strata.providers import OpenAIProvider
+from strata.strategies import AgentResult
+from strata.strategies import Strategy
 
 
 class LeakyStrategy(Strategy):

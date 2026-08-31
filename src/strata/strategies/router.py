@@ -2,13 +2,16 @@ from __future__ import annotations
 
 import logging
 from typing import Any
+from typing import TYPE_CHECKING
 
 from strata.agent.context import Context
-from strata.runtime.runtime import Runtime
 from strata.strategies.base import AgentResult
 from strata.strategies.base import Strategy
 from strata.tools.base import Tool
 from strata.tools.base import ToolEnv
+
+if TYPE_CHECKING:
+    from strata.runtime.runtime import Runtime
 
 logger = logging.getLogger(__name__)
 

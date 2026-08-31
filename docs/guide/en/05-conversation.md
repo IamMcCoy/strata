@@ -100,7 +100,7 @@ is missing. The reverse (call kept, result missing) is rejected too.
 ### `trim_history`
 
 ```python
-from strata import trim_history
+from strata.conversation import trim_history
 
 history = trim_history(db.load(session_id), keep_turns=10)
 result = await agent.run(task, history=history)

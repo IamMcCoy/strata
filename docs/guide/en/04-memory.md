@@ -16,7 +16,7 @@ It is not conversation history — that's [5. Multi-turn](05-conversation.md). T
 ## Three implementations
 
 ```python
-from strata import InMemory, SQLiteMemory, RedisMemory
+from strata.memory import InMemory, SQLiteMemory, RedisMemory
 
 InMemory()                                          # dev/testing. Gone when the process dies
 SQLiteMemory('memory.db', namespace='user:42')      # persistent. stdlib sqlite3, so zero dependencies
@@ -79,7 +79,7 @@ Agent(..., memory=mem, tools=[MemoryTool()])  # read and write
 ## Putting things in and taking them out yourself
 
 ```python
-from strata import MemoryItem
+from strata.memory import MemoryItem
 
 await mem.store(MemoryItem(content='This user belongs to the R&D Center'))
 await mem.store(MemoryItem(content='Deployments are approved by the team lead', type='procedural'))
@@ -125,7 +125,7 @@ Three limitations, accepted knowingly:
 ## Building your own
 
 ```python
-from strata import Memory, MemoryItem
+from strata.memory import Memory, MemoryItem
 from strata.memory.base import rank        # share the scoring function and results stay consistent
 
 class MyMemory(Memory):

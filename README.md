@@ -13,7 +13,10 @@ Runtime이 이들을 연결·실행·관찰한다.
 `openai`/`anthropic` 버전과 절대 충돌하지 않는다.
 
 ```python
-from strata import Agent, OpenAIProvider, RLMStrategy, RuntimeConfig
+from strata.agent import Agent
+from strata.providers import OpenAIProvider
+from strata.runtime import RuntimeConfig
+from strata.strategies import RLMStrategy
 
 agent = Agent(
     provider=OpenAIProvider(model='gpt-4o-mini', model_params={'temperature': 0.3}),
@@ -163,6 +166,20 @@ uv add 'strata[openai] @ git+https://github.com/IamMcCoy/strata.git'
 ```
 
 타입 힌트가 포함되어 있다(PEP 561, `py.typed`).
+
+## import 경로
+
+이름은 성격별로 나뉜다 — `strata.agent` / `strata.providers` / `strata.strategies` /
+`strata.tools` / `strata.memory` / `strata.runtime`.
+
+```python
+from strata.agent import Agent
+from strata.providers import OpenAIProvider
+from strata.strategies import ReActStrategy
+```
+
+전부 최상위에서도 import된다(`from strata import Agent`). 같은 객체이고,
+두 경로가 어긋나지 않도록 `tests/test_packaging.py`가 강제한다.
 
 ## 예제
 
